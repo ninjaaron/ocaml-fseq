@@ -1,0 +1,6 @@
+(library
+ (public_name fingerTree)
+ (name fingerTree)
+ (libraries la_base)
+ (preprocess
+  (pps ppx_deriving.std)))

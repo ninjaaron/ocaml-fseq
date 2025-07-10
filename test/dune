@@ -1,0 +1,5 @@
+(test
+ (name test_fingerTree)
+ (libraries la_base)
+ (preprocess
+  (pps ppx_deriving.std)))
