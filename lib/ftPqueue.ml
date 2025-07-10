@@ -22,14 +22,16 @@ module Make(M : Orderable) = struct
   end)
 
 
-  let max t =
+  let get_max t =
     let p prio =
       match measure t, prio with
       | MInfty, _ -> true
       | _, MInfty -> false
       | Prio t, Prio el ->
         M.compare t el <= 0 in
-    Result.map (fun (lazy l, el, lazy r) -> el, l >< r) (partition ~p t)
+    let open La_base in
+    let+! l, el, r = partition ~p t in
+    el, l >< r
 end
 
 include Make(struct

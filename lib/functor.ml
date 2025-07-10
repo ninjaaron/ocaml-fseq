@@ -1,3 +1,4 @@
+open La_base
 module type Container = sig type 'a t end
 
 type 'a thunk = unit -> 'a
@@ -57,17 +58,20 @@ module type S = sig
   val measure : 'a t -> monoid
   val fold_right : f:('a elt -> 'b -> 'b) -> 'a t -> init:'b -> 'b
   val fold_left : f:('b -> 'a elt -> 'b) -> init:'b -> 'a t -> 'b
+  val fold : f:('b -> 'a elt -> 'b) -> init:'b -> 'a t -> 'b
   val map : f:('a elt -> 'b elt) -> 'a t -> 'b t
   val filter : f:('a elt -> bool) -> 'a t -> 'a t
   val filter_map : f:('a elt -> 'b elt option) -> 'a t -> 'b t
   val concat_map : f:('a elt -> 'b t) -> 'a t -> 'b t
   val iter : f:('a elt -> unit) -> 'a t -> unit
-  val cons_left : 'a elt -> 'a t -> 'a t
-  val cons_right : 'a t -> 'a elt -> 'a t
+  val ladd : 'a elt -> 'a t -> 'a t
+  val radd : 'a t -> 'a elt -> 'a t
   val (<$) : 'a elt -> 'a t -> 'a t
   val ($>) : 'a t -> 'a elt -> 'a t
-  val view_left : 'a t -> ('a elt * 'a t Lazy.t) option
-  val view_right : 'a t -> ('a elt * 'a t Lazy.t) option
+  val lview : 'a t -> ('a elt * 'a t) option
+  val rview : 'a t -> ('a t * 'a elt) option
+  val lview_lazy : 'a t -> ('a elt * 'a t Lazy.t) option
+  val rview_lazy : 'a t -> ('a t Lazy.t * 'a elt) option
   val is_empty: 'a t -> bool
   val hd_left_exn : 'a t -> 'a elt
   val tl_left : 'a t -> 'a t
@@ -77,13 +81,18 @@ module type S = sig
   val (><) : 'a t -> 'a t -> 'a t
   val join_with : 'a t -> 'a elt -> 'a t -> 'a t
   val concat : 'a t list -> 'a t
-  val partition
+  val partition_lazy
     : p:(monoid -> bool) -> 'a t ->
     ('a t Lazy.t * 'a elt * 'a t Lazy.t, string) result
+  val partition
+    : p:(monoid -> bool) -> 'a t ->
+    ('a t * 'a elt * 'a t, string) result
   val split : p:(monoid -> bool) -> 'a t -> 'a t Lazy.t * 'a t Lazy.t
   val get : p:(monoid -> bool) -> 'a t -> 'a elt
   val insert : p:(monoid -> bool) -> 'a elt -> 'a t -> 'a t
   val update : p:(monoid -> bool) -> 'a elt -> 'a t -> 'a t
+  val pop : p:(monoid -> bool) -> 'a t -> ('a elt * 'a t, string) result
+  val remove : p:(monoid -> bool) -> 'a t -> ('a t, string) result
   val of_list : 'a elt list -> 'a t
   val to_list : 'a t -> 'a elt list
   val of_seq : 'a elt Seq.t -> 'a t
@@ -411,8 +420,6 @@ module Make (M: Measurable)
 
   let measure t = _measure M.measure t
 
-  let force = Lazy.force
-
   let rec pp :
     'a. (Format.formatter -> 'a -> unit) ->
     Format.formatter -> 'a t0 -> unit =
@@ -454,6 +461,8 @@ module Make (M: Measurable)
         and f'' = fold_left ~f:(Node.fold_left f) in
         f' (f'' ~init:(f' init pr) mid) sf
 
+  let fold = fold_left
+
   let rec _ladd : 'a. 'a measure -> 'a -> 'a t0 -> 'a t0 = fun ms a t ->
     match t with
     | Empty -> Single a
@@ -462,9 +471,10 @@ module Make (M: Measurable)
       deep ms
         (Two (a,b)) (_ladd Node.measure (Node.mk3 ms c d e) mid) sf
     | Deep (_,pr,lazy mid, sf) -> deep ms (Digit.ladd a pr) mid sf
-  let cons_left a t = _ladd M.measure a t
 
-  let (<$) = cons_left
+  let ladd a t = _ladd M.measure a t
+
+  let (<$) = ladd
 
   let rec _ladd_digit : 'a. 'a measure -> 'a Digit.t -> 'a t0 -> 'a t0 =
     fun ms d t ->
@@ -492,9 +502,9 @@ module Make (M: Measurable)
         (_radd Node.measure mid (Node.mk3 ms v w x))
         (Two (y,z))
     | Deep (_, pr, lazy mid, sf) -> deep ms pr mid (Digit.radd sf z)
-  let cons_right t a = _radd M.measure t a
+  let radd t a = _radd M.measure t a
 
-  let ($>) = cons_right
+  let ($>) = radd
 
   let rec _radd_digit : 'a. 'a measure -> 'a t0 -> 'a Digit.t -> 'a t0 =
     fun ms t d ->
@@ -513,7 +523,14 @@ module Make (M: Measurable)
       | Some nodes, sf' ->
         deep ms pr (_radd_digit Node.measure mid nodes) sf'
 
-  let of_digit ms d = Digit.fold_left (_radd ms) Empty d
+  let of_digit ms = function
+    | Digit.One a -> Single a
+    | Two (a, b) ->
+      Deep (ms a + ms b, One a, lempty, One b)
+    | Three (a, b, c) -> 
+      Deep (ms a + ms b + ms c, Two (a, b), lempty, One c)
+    | Four (a, b, c, d) -> 
+      Deep (ms a + ms b + ms c + ms d, Two (a, b), lempty, Two (c, d))
 
   let rec view_l : 'a. 'a measure -> 'a t0 ->  ('a * 'a t0 Lazy.t) option =
     fun ms t ->
@@ -526,17 +543,19 @@ module Make (M: Measurable)
   and deep_l : 'a. 'a measure -> 'a Digit.t option ->
     'a Node.t t0 Lazy.t -> 'a Digit.t -> 'a t0 Lazy.t =
     fun ms pr mid sf -> lazy (
-      let mid = force mid in
+      let mid = !!mid in
       match pr with
       | None -> begin match view_l Node.measure mid with
           | None -> of_digit ms sf
           | Some (a,lazy mid') -> deep ms (Digit.of_node a) mid' sf
         end
       | Some pr -> deep ms pr mid sf)
-  let view_left t = view_l M.measure t
+  let lview_lazy t = view_l M.measure t
+  let lview t =
+    let+? (h, lazy t) = lview_lazy t in h, t
 
   let is_empty t =
-    match view_left t with
+    match lview_lazy t with
     | None -> true
     | Some _ -> false
 
@@ -545,30 +564,32 @@ module Make (M: Measurable)
     | Single x -> x
     | Deep (_,pr,_,_) -> Digit.hd pr
 
-  let tl_left t = match view_left t with
+  let tl_left t = match lview t with
     | None -> Empty
-    | Some (_, lazy t) -> t
+    | Some (_, t) -> t
 
-  let rec view_r : 'a. 'a measure -> 'a t0 -> ('a * 'a t0 Lazy.t) option =
+  let rec view_r : 'a. 'a measure -> 'a t0 -> ('a t0 Lazy.t * 'a) option =
     fun ms t ->
     match t with
     | Empty -> None
-    | Single x -> Some (x, lempty)
+    | Single x -> Some (lempty, x)
     | Deep (_,pr,mid,sf) ->
       let hd, tl = Digit.view_r sf in
-      Some (hd, deep_r ms pr mid tl)
+      Some (deep_r ms pr mid tl, hd)
   and deep_r :
     'a. 'a measure -> 'a Digit.t -> 'a Node.t t0 Lazy.t -> 'a Digit.t option -> 'a t0 Lazy.t =
     fun ms pr mid sf -> lazy (
-      let mid = force mid in
+      let mid = !!mid in
       match sf with
       | None -> begin match view_r Node.measure mid with
           | None -> of_digit ms pr
-          | Some (a, lazy mid') ->
+          | Some (lazy mid', a) ->
             deep ms pr mid' (Digit.of_node a)
         end
       | Some sf -> deep ms pr mid sf)
-  let view_right t = view_r M.measure t
+  let rview_lazy t = view_r M.measure t
+  let rview t =
+    let+? (lazy t, h) = rview_lazy t in t, h
 
   let hd_right_exn = function
     | Empty -> invalid_arg "can't find head of empty finger tree"
@@ -576,9 +597,9 @@ module Make (M: Measurable)
     | Deep (_,_,_,sf) -> Digit.hd_r sf
 
   let tl_right t =
-    match view_right t with
+    match rview t with
     | None -> Empty
-    | Some(_, lazy t) -> t
+    | Some(t, _) -> t
 
   let rec _app3 : 'a. 'a measure -> 'a t0 -> 'a Digit.t -> 'a t0 -> 'a t0 =
     fun ms t1 d t2 ->
@@ -664,7 +685,7 @@ module Make (M: Measurable)
           x
   let get ~p t = get M.measure p M.null t
 
-  let partition ~p = function
+  let partition_lazy ~p = function
     | Empty -> Error "cannot partition empty tree"
     | xs ->
       let Split (l,x,r) = _split M.measure p M.null xs in
@@ -672,41 +693,57 @@ module Make (M: Measurable)
         Ok (l, x, r)
       else Error "predicate p was not satisfied by tree"
 
+  let partition ~p t =
+    let+! (lazy l, x, lazy r) = partition_lazy ~p t in
+    l, x, r
+
   let split ~p = function
     | Empty -> (lempty, lempty)
     | xs ->
       let Split (l,x,r) = _split M.measure p M.null xs in
       if p (measure xs) then
-        (l, lazy (_ladd M.measure x @@ force r))
+        (l, lazy (_ladd M.measure x @@ !!r))
       else (lazy xs, lempty)
 
   let insert ~p x t =
     let Split(l, el, r) = _split M.measure p M.null t in
-    _app3 M.measure (force l) (Two(x,el)) (force r)
+    _app3 M.measure (!!l) (Two(x,el)) (!!r)
 
   let update ~p x t =
     let Split(l, _, r) = _split M.measure p M.null t in
-    _app3 M.measure (force l) (One x) (force r)
+    _app3 M.measure (!!l) (One x) (!!r)
 
-  let of_list l = List.fold_left cons_right empty l
+  let pop ~p t =
+    let+! l, el, r = partition ~p t in
+    el, l >< r
+
+  let remove ~p t =
+    let+! _, t = pop ~p t in t
+
+  let of_list l = List.fold_left radd empty l
   let to_list t = fold_right ~f:List.cons ~init:[] t
-  let of_seq s = Seq.fold_left cons_right empty s
+  let of_seq s = Seq.fold_left radd empty s
   let iter ~f t = fold_left ~f:(fun () el -> f el) ~init:() t
   let map ~f t = fold_left t ~init:empty
-      ~f:(fun acc el -> cons_right acc (f el))
+      ~f:(fun acc el -> radd acc (f el))
   let filter ~f t = fold_left t ~init:empty
-      ~f:(fun acc el -> if f el then cons_right acc el else acc)
+      ~f:(fun acc el -> if f el then radd acc el else acc)
   let filter_map ~f t = fold_left t ~init:empty
       ~f:(fun acc el -> match f el with
-            None -> acc | Some el -> cons_right acc el)
+            None -> acc | Some el -> radd acc el)
   let concat_map ~f t = fold_left t ~init:empty
       ~f:(fun acc el -> join acc (f el))
 
   let rec _to_seq_node view t = match view t with
     | None -> Seq.Nil
     | Some (hd, tl) ->
-      Seq.Cons(hd, fun () -> _to_seq_node view (force tl))
+      Seq.Cons(hd, fun () -> _to_seq_node view (!!tl))
 
-  let to_seq t () = _to_seq_node view_left t
-  let rev_to_seq t () = _to_seq_node view_right t
+  let to_seq t () = _to_seq_node lview_lazy t
+
+  let rec rev_to_seq t () =
+    match rview t with
+    | None -> Seq.Nil
+    | Some (t, h) ->
+      Seq.Cons(h, rev_to_seq t)
 end
