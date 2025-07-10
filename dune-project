@@ -1,6 +1,6 @@
 (lang dune 3.19)
 
-(name fingerTree)
+(name la_fingertree)
 
 (generate_opam_files true)
 
@@ -16,7 +16,7 @@
 (documentation https://url/to/documentation)
 
 (package
- (name fingerTree)
+ (name la_fingertree)
  (synopsis "A short synopsis")
  (description "A longer description")
  (depends ocaml)
