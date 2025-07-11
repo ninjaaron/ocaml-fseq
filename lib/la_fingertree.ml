@@ -1,2 +1,2 @@
-module Seq = FtSeq
-module Pqueue = FtPqueue
+module Seq = Seq
+module Pqueue = Pqueue

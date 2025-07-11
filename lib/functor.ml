@@ -1,4 +1,6 @@
 open La_base
+module Seq = Stdlib.Seq
+
 module type Container = sig type 'a t end
 
 type 'a thunk = unit -> 'a
@@ -66,8 +68,8 @@ module type S = sig
   val iter : f:('a elt -> unit) -> 'a t -> unit
   val ladd : 'a elt -> 'a t -> 'a t
   val radd : 'a t -> 'a elt -> 'a t
-  val (<$) : 'a elt -> 'a t -> 'a t
-  val ($>) : 'a t -> 'a elt -> 'a t
+  val (<@) : 'a elt -> 'a t -> 'a t
+  val (@>) : 'a t -> 'a elt -> 'a t
   val lview : 'a t -> ('a elt * 'a t) option
   val rview : 'a t -> ('a t * 'a elt) option
   val lview_lazy : 'a t -> ('a elt * 'a t Lazy.t) option
@@ -82,22 +84,26 @@ module type S = sig
   val join_with : 'a t -> 'a elt -> 'a t -> 'a t
   val concat : 'a t list -> 'a t
   val partition_lazy
-    : p:(monoid -> bool) -> 'a t ->
-    ('a t Lazy.t * 'a elt * 'a t Lazy.t, string) result
+    : p:(monoid -> bool) -> 'a t -> 'a t Lazy.t * 'a elt * 'a t Lazy.t
   val partition
-    : p:(monoid -> bool) -> 'a t ->
-    ('a t * 'a elt * 'a t, string) result
+    : p:(monoid -> bool) -> 'a t -> 'a t * 'a elt * 'a t
   val split : p:(monoid -> bool) -> 'a t -> 'a t Lazy.t * 'a t Lazy.t
   val get : p:(monoid -> bool) -> 'a t -> 'a elt
   val insert : p:(monoid -> bool) -> 'a elt -> 'a t -> 'a t
   val update : p:(monoid -> bool) -> 'a elt -> 'a t -> 'a t
-  val pop : p:(monoid -> bool) -> 'a t -> ('a elt * 'a t, string) result
-  val remove : p:(monoid -> bool) -> 'a t -> ('a t, string) result
+  val pop : p:(monoid -> bool) -> 'a t -> 'a elt * 'a t
+  val remove : p:(monoid -> bool) -> 'a t -> 'a t
   val of_list : 'a elt list -> 'a t
   val to_list : 'a t -> 'a elt list
   val of_seq : 'a elt Seq.t -> 'a t
   val to_seq : 'a t -> 'a elt Seq.t
   val rev_to_seq : 'a t -> 'a elt Seq.t
+
+  module Operators : sig
+    val (<@) : 'a elt -> 'a t -> 'a t
+    val (@>) : 'a t -> 'a elt -> 'a t
+    val (><) : 'a t -> 'a t -> 'a t
+  end
 end
 
 module Make (M: Measurable)
@@ -474,7 +480,7 @@ module Make (M: Measurable)
 
   let ladd a t = _ladd M.measure a t
 
-  let (<$) = ladd
+  let (<@) = ladd
 
   let rec _ladd_digit : 'a. 'a measure -> 'a Digit.t -> 'a t0 -> 'a t0 =
     fun ms d t ->
@@ -504,7 +510,7 @@ module Make (M: Measurable)
     | Deep (_, pr, lazy mid, sf) -> deep ms pr mid (Digit.radd sf z)
   let radd t a = _radd M.measure t a
 
-  let ($>) = radd
+  let (@>) = radd
 
   let rec _radd_digit : 'a. 'a measure -> 'a t0 -> 'a Digit.t -> 'a t0 =
     fun ms t d ->
@@ -686,15 +692,15 @@ module Make (M: Measurable)
   let get ~p t = get M.measure p M.null t
 
   let partition_lazy ~p = function
-    | Empty -> Error "cannot partition empty tree"
+    | Empty -> invalid_arg "cannot partition empty tree"
     | xs ->
       let Split (l,x,r) = _split M.measure p M.null xs in
       if p (measure xs) then
-        Ok (l, x, r)
-      else Error "predicate p was not satisfied by tree"
+        l, x, r
+      else invalid_arg "predicate p was not satisfied by tree"
 
   let partition ~p t =
-    let+! (lazy l, x, lazy r) = partition_lazy ~p t in
+    let (lazy l, x, lazy r) = partition_lazy ~p t in
     l, x, r
 
   let split ~p = function
@@ -714,11 +720,11 @@ module Make (M: Measurable)
     _app3 M.measure (!!l) (One x) (!!r)
 
   let pop ~p t =
-    let+! l, el, r = partition ~p t in
+    let l, el, r = partition ~p t in
     el, l >< r
 
   let remove ~p t =
-    let+! _, t = pop ~p t in t
+    let _, t = pop ~p t in t
 
   let of_list l = List.fold_left radd empty l
   let to_list t = fold_right ~f:List.cons ~init:[] t
@@ -746,4 +752,11 @@ module Make (M: Measurable)
     | None -> Seq.Nil
     | Some (t, h) ->
       Seq.Cons(h, rev_to_seq t)
+
+  module Operators = struct
+    let (@>) = (@>)
+    let (<@) = (<@)
+    let (><) = (><)
+  end
+
 end

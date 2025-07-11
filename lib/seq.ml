@@ -13,29 +13,29 @@ let bounds_check i t =
     raise @@ Invalid_argument "index is out of bounds"
   else ()
 
-let partition_unchecked i t =
-  partition ~p:((<) i) t
-
-let partition i t =
+let partition_exn i t =
   bounds_check i t;
   partition ~p:((<) i) t
   
 let partition_opt i t =
-  match partition i t with
+  match partition_exn i t with
   | exception _ -> None
   | value -> Some value
 
+let split_exn i t =
+  bounds_check i t;
+  Some (split ~p:((<) i) t)
+
 let split i t =
-  split ~p:((<) i) t
+  match split_exn i t with
+  | exception _ -> None
+  | v -> Some v
 
-let get_unchecked i t =
-  get ~p:((<) i) t
-
-let get i t =
+let get_exn i t =
   bounds_check i t;
   get ~p:((<) i) t
 
-let get_opt i t =
+let get i t =
   match get i t with
   | exception _ -> None
   | value -> Some value
@@ -43,23 +43,38 @@ let get_opt i t =
 let insert_unchecked i el t =
   insert ~p:((<) i) el t
   
-let insert i el t =
+let insert_exn i el t =
   bounds_check i t;
   insert ~p:((<) i) el t
 
-let insert_opt i el t =
-  match insert i el t with
+let insert i el t =
+  match insert_exn i el t with
   | exception _ -> None
   | value -> Some value
-
-let update_unchecked i el t =
-  update ~p:((<) i) el t
   
-let update i el t =
+let update_exn i el t =
   bounds_check i t;
   update ~p:((<) i) el t
 
-let update_opt i el t =
-  match update i el t with
+let update i el t =
+  match update_exn i el t with
+  | exception _ -> None
+  | value -> Some value
+
+let pop_exn i t =
+  bounds_check i t;
+  pop ~p:((<) i) t
+
+let pop i t =
+  match pop_exn i t with
+  | exception _ -> None
+  | value -> Some value
+
+let remove_exn i t =
+  bounds_check i t;
+  remove ~p:((<) i) t
+
+let remove i t =
+  match remove_exn i t with
   | exception _ -> None
   | value -> Some value
