@@ -19,7 +19,7 @@
  (name la_fingertree)
  (synopsis "A short synopsis")
  (description "A longer description")
- (depends ocaml)
+ (depends ocaml la_base)
  (tags
   ("add topics" "to describe" your project)))
 
