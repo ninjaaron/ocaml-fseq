@@ -97,7 +97,6 @@ module type S = sig
   val to_list : 'a t -> 'a elt list
   val of_seq : 'a elt Seq.t -> 'a t
   val to_seq : 'a t -> 'a elt Seq.t
-  val rev_to_seq : 'a t -> 'a elt Seq.t
 
   module Operators : sig
     val (@>) : 'a elt -> 'a t -> 'a t
@@ -141,6 +140,16 @@ module Make (M: Measurable)
     let fold_left f acc = function
       | N2 (_,a,b) -> f (f acc a) b
       | N3 (_,a,b,c) -> f (f (f acc a) b) c
+
+    let map ms f = function
+      | N2 (_, a, b) -> mk2 ms (f a) (f b)
+      | N3 (_, a, b, c) -> mk3 ms (f a) (f b) (f c)
+
+    let to_seq t () =
+      let open Seq in
+      match t with
+      | N2 (_, a, b) -> Cons (a, cons b empty)
+      | N3 (_, a, b, c) -> Cons (a, cons b (cons c empty))
   end
 
   module Digit = struct
@@ -344,6 +353,12 @@ module Make (M: Measurable)
       | Three (a,b,c) -> f (f (f acc a) b) c
       | Four (a,b,c,d) -> f (f (f (f acc a) b) c) d
 
+    let map f = function
+      | One a -> One (f a)
+      | Two (a, b) -> Two (f a, f b)
+      | Three (a, b, c) -> Three (f a, f b, f c)
+      | Four (a, b, c, d) -> Four (f a, f b, f c, f d)
+
     let fold_right f t acc = match t with
       | One a -> f a acc
       | Two (a,b) -> f a (f b acc)
@@ -407,6 +422,14 @@ module Make (M: Measurable)
         let i' = i + ms x in
         if p i' then x
         else let x' = get ms p i' xs in x'
+
+    let to_seq t () =
+      let open Seq in
+      match t with
+      | One a -> Cons (a, empty)
+      | Two (a, b) -> Cons (a, cons b empty)
+      | Three (a, b, c) -> Cons (a, cons b (cons c empty))
+      | Four (a, b, c, d) -> Cons (a, cons b (cons c (cons d empty)))
   end
 
   type +'a t0 =
@@ -730,28 +753,38 @@ module Make (M: Measurable)
   let to_list t = fold_right ~f:List.cons ~init:[] t
   let of_seq s = Seq.fold_left radd empty s
   let iter ~f t = fold_left ~f:(fun () el -> f el) ~init:() t
-  let map ~f t = fold_left t ~init:empty
-      ~f:(fun acc el -> radd acc (f el))
+
+  let rec map : 'a 'b. 'b measure -> f:('a -> 'b) -> 'a t0 -> 'b t0 =
+    fun ms ~f -> function
+      | Empty -> Empty
+      | Single x -> Single (f x)
+      | Deep (_, l, lazy m, r) ->
+        let m' = map Node.measure ~f:(fun n -> Node.map ms f n) m in
+        deep ms (Digit.map f l) m' (Digit.map f r)
+
+  let map ~f t = map M.measure ~f t
+
   let filter ~f t = fold_left t ~init:empty
       ~f:(fun acc el -> if f el then radd acc el else acc)
+
   let filter_map ~f t = fold_left t ~init:empty
       ~f:(fun acc el -> match f el with
             None -> acc | Some el -> radd acc el)
+
   let concat_map ~f t = fold_left t ~init:empty
       ~f:(fun acc el -> join acc (f el))
 
-  let rec _to_seq_node view t = match view t with
-    | None -> Seq.Nil
-    | Some (hd, tl) ->
-      Seq.Cons(hd, fun () -> _to_seq_node view (!!tl))
-
-  let to_seq t () = _to_seq_node lview_lazy t
-
-  let rec rev_to_seq t () =
-    match rview t with
-    | None -> Seq.Nil
-    | Some (t, h) ->
-      Seq.Cons(h, rev_to_seq t)
+  let rec to_seq : 'a. 'a t0 -> 'a Seq.t =
+    fun t () ->
+    let open Seq in
+    match t with
+    | Empty -> Nil
+    | Single a -> Cons (a, empty)
+    | Deep (_, l, lazy m, r) ->
+      let end' = Digit.to_seq r
+      and mid' = concat_map Node.to_seq (to_seq m)
+      and start' = Digit.to_seq l in
+      (append start' @@ append mid' end') ()
 
   module Operators = struct
     let (@>) = (@>)

@@ -132,3 +132,9 @@ let rec sort ~cmp t =
   | _ ->
     let left, p, right = sorta_sort ~cmp t in
     join_with (sort ~cmp left) p (sort ~cmp right)
+
+let init ~len ~f =
+  let rec loop i t =
+    if i >= len then t else
+      loop (i+1) (t <@ f i) in
+  loop 0 empty
