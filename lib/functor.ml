@@ -122,7 +122,7 @@ module Make (M: Measurable)
       match t with
       | N2 (_,a,b) -> fprintf out "(@[%a,@ %a@])" pp_el a pp_el b
       | N3 (_,a,b,c) ->
-        fprintf out "(@[%a,@ %a@, %a@])" pp_el a pp_el b pp_el c
+        fprintf out "(@[%a,@ %a,@ %a@])" pp_el a pp_el b pp_el c
 
     let show pp_el t = Format.asprintf "%a" (pp pp_el) t
 
