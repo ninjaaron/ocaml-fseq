@@ -97,6 +97,7 @@ module type S = sig
   val to_list : 'a t -> 'a elt list
   val of_seq : 'a elt Seq.t -> 'a t
   val to_seq : 'a t -> 'a elt Seq.t
+  val to_seq2 : 'a t -> 'a elt Seq.t
 
   module Operators : sig
     val (@>) : 'a elt -> 'a t -> 'a t
@@ -785,6 +786,11 @@ module Make (M: Measurable)
       and mid' = concat_map Node.to_seq (to_seq m)
       and start' = Digit.to_seq l in
       (append start' @@ append mid' end') ()
+
+  let rec to_seq2 t () =
+    match lview t with
+    | None -> Seq.Nil
+    | Some (h, t') -> Seq.Cons(h, to_seq2 t')
 
   module Operators = struct
     let (@>) = (@>)
