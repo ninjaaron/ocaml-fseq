@@ -97,7 +97,7 @@ module type S = sig
   val to_list : 'a t -> 'a elt list
   val of_seq : 'a elt Seq.t -> 'a t
   val to_seq : 'a t -> 'a elt Seq.t
-  val to_seq2 : 'a t -> 'a elt Seq.t
+  val rev_to_seq : 'a t -> 'a elt Seq.t
 
   module Operators : sig
     val (@>) : 'a elt -> 'a t -> 'a t
@@ -151,6 +151,12 @@ module Make (M: Measurable)
       match t with
       | N2 (_, a, b) -> Cons (a, cons b empty)
       | N3 (_, a, b, c) -> Cons (a, cons b (cons c empty))
+
+    let rev_to_seq t () =
+      let open Seq in
+      match t with
+      | N2 (_, a, b) -> Cons (b, cons a empty)
+      | N3 (_, a, b, c) -> Cons (c, cons b (cons a empty))
   end
 
   module Digit = struct
@@ -431,6 +437,14 @@ module Make (M: Measurable)
       | Two (a, b) -> Cons (a, cons b empty)
       | Three (a, b, c) -> Cons (a, cons b (cons c empty))
       | Four (a, b, c, d) -> Cons (a, cons b (cons c (cons d empty)))
+
+    let rev_to_seq t () =
+      let open Seq in
+      match t with
+      | One a -> Cons (a, empty)
+      | Two (a, b) -> Cons (b, cons a empty)
+      | Three (a, b, c) -> Cons (c, cons b (cons a empty))
+      | Four (a, b, c, d) -> Cons (d, cons c (cons b (cons a empty)))
   end
 
   type +'a t0 =
@@ -787,10 +801,17 @@ module Make (M: Measurable)
       and start' = Digit.to_seq l in
       (append start' @@ append mid' end') ()
 
-  let rec to_seq2 t () =
-    match lview t with
-    | None -> Seq.Nil
-    | Some (h, t') -> Seq.Cons(h, to_seq2 t')
+  let rec rev_to_seq : 'a. 'a t0 -> 'a Seq.t =
+    fun t () ->
+    let open Seq in
+    match t with
+    | Empty -> Nil
+    | Single a -> Cons (a, empty)
+    | Deep (_, l, lazy m, r) ->
+      let end' = Digit.rev_to_seq r
+      and mid' = concat_map Node.rev_to_seq (rev_to_seq m)
+      and start' = Digit.rev_to_seq l in
+      (append end' @@ append mid' start') ()
 
   module Operators = struct
     let (@>) = (@>)
