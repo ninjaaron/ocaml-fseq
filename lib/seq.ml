@@ -138,3 +138,14 @@ let init ~len ~f =
     if i >= len then t else
       loop (i+1) (t <@ f i) in
   loop 0 empty
+
+let concat_map2 ~f t =
+  let mapped = map ~f t in
+  let rec balance t =
+    match length t with
+    | 0 -> empty
+    | 1 -> hd_left_exn t
+    | n ->
+      let (lazy l, lazy r) = split_unchecked (n / pos_exn 2) t in
+      balance l >< balance r in
+  balance mapped

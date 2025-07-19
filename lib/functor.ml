@@ -98,6 +98,7 @@ module type S = sig
   val of_seq : 'a elt Seq.t -> 'a t
   val to_seq : 'a t -> 'a elt Seq.t
   val rev_to_seq : 'a t -> 'a elt Seq.t
+  val unfold : f:('a -> ('b elt * 'a) option) -> init:'a -> 'b t
 
   module Operators : sig
     val (@>) : 'a elt -> 'a t -> 'a t
@@ -787,7 +788,7 @@ module Make (M: Measurable)
             None -> acc | Some el -> radd acc el)
 
   let concat_map ~f t = fold_left t ~init:empty
-      ~f:(fun acc el -> join acc (f el))
+      ~f:(fun acc el -> acc >< (f el))
 
   let rec to_seq : 'a. 'a t0 -> 'a Seq.t =
     fun t () ->
@@ -812,6 +813,14 @@ module Make (M: Measurable)
       and mid' = concat_map Node.rev_to_seq (rev_to_seq m)
       and start' = Digit.rev_to_seq l in
       (append end' @@ append mid' start') ()
+
+  let unfold ~f ~init =
+    let rec loop acc state =
+      match f state with
+      | None -> acc
+      | Some (el, state') ->
+        loop (acc <@ el) state' in
+    loop empty init
 
   module Operators = struct
     let (@>) = (@>)
