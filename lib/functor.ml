@@ -47,16 +47,17 @@ module type S = sig
   type +'a t0 =
     | Empty
     | Single of 'a
-    | Deep of monoid * 'a Digit.t * 'a Node.t t0 Lazy.t * 'a Digit.t
+    | Deep of monoid Lazy.t * 'a Digit.t * 'a Node.t t0 Lazy.t * 'a Digit.t
 
   type +'a elt
-  type +'a t
+  type +'a t = 'a elt t0
 
   val pp : (Format.formatter -> 'a elt -> unit)
     -> Format.formatter -> 'a t -> unit
     [@@ocaml.toplevel_printer]
   val show : (Format.formatter -> 'a elt -> unit) -> 'a t -> string
   val empty : 'a t
+  val singleton : 'a elt -> 'a t
   val measure : 'a t -> monoid
   val fold_right : f:('a elt -> 'b -> 'b) -> 'a t -> init:'b -> 'b
   val fold_left : f:('b -> 'a elt -> 'b) -> init:'b -> 'a t -> 'b
@@ -451,17 +452,18 @@ module Make (M: Measurable)
   type +'a t0 =
     | Empty
     | Single of 'a
-    | Deep of M.monoid * 'a Digit.t * 'a Node.t t0 Lazy.t * 'a Digit.t
+    | Deep of M.monoid Lazy.t * 'a Digit.t * 'a Node.t t0 Lazy.t * 'a Digit.t
 
   type +'a t = 'a elt t0
   
   let empty = Empty
   let lempty = lazy Empty
+  let singleton x = Single x
 
   let _measure ms = function
     | Empty -> M.null
     | Single a -> ms a
-    | Deep (v,_,_,_) -> v 
+    | Deep (lazy v,_,_,_) -> v 
 
   let measure t = _measure M.measure t
 
@@ -482,9 +484,9 @@ module Make (M: Measurable)
   let show pp_el t = Format.asprintf "%a" (pp pp_el) t
 
   let deep ms pr mid sf =
-    Deep (
-      Digit.measure ms pr + _measure Node.measure mid + Digit.measure ms sf,
-      pr, lazy mid, sf
+    Deep ( 
+      lazy (Digit.measure ms pr + _measure Node.measure !!mid + Digit.measure ms sf),
+      pr, mid, sf
     )
     
 
@@ -511,11 +513,11 @@ module Make (M: Measurable)
   let rec _ladd : 'a. 'a measure -> 'a -> 'a t0 -> 'a t0 = fun ms a t ->
     match t with
     | Empty -> Single a
-    | Single b -> deep ms (One a) Empty (One b)
-    | Deep (_, Four (b,c,d,e), lazy mid, sf) ->
+    | Single b -> deep ms (One a) lempty (One b)
+    | Deep (_, Four (b,c,d,e), mid, sf) ->
       deep ms
-        (Two (a,b)) (_ladd Node.measure (Node.mk3 ms c d e) mid) sf
-    | Deep (_,pr,lazy mid, sf) -> deep ms (Digit.ladd a pr) mid sf
+        (Two (a,b)) (lazy(_ladd Node.measure (Node.mk3 ms c d e) !!mid)) sf
+    | Deep (_,pr, mid, sf) -> deep ms (Digit.ladd a pr) mid sf
 
   let ladd a t = _ladd M.measure a t
 
@@ -526,27 +528,27 @@ module Make (M: Measurable)
     match d, t with
     | One a, Empty -> Single a
     | One a, Single b
-    | Two(a,b), Empty -> deep ms (One a) Empty (One b)
+    | Two(a,b), Empty -> deep ms (One a) lempty (One b)
     | Two(a,b), Single c
-    | Three(a,b,c), Empty -> deep ms (Two(a,b)) Empty (One c)
+    | Three(a,b,c), Empty -> deep ms (Two(a,b)) lempty (One c)
     | Three(a,b,c), Single d
-    | Four(a,b,c,d), Empty -> deep ms (Two(a,b)) Empty (Two(c,d))
-    | Four(a,b,c,d), Single e -> deep ms (Three(a,b,c)) Empty (Two(d,e))
-    | digit, Deep (_, pr, lazy mid, sf) ->
+    | Four(a,b,c,d), Empty -> deep ms (Two(a,b)) lempty (Two(c,d))
+    | Four(a,b,c,d), Single e -> deep ms (Three(a,b,c)) lempty (Two(d,e))
+    | digit, Deep (_, pr, mid, sf) ->
       match Digit.joinl ms digit pr with
       | pr', None -> deep ms pr' mid sf
       | pr', Some nodes ->
-        deep ms pr' (_ladd_digit Node.measure nodes mid) sf
+        deep ms pr' (lazy (_ladd_digit Node.measure nodes !!mid)) sf
 
   let rec _radd : 'a. 'a measure -> 'a t0 -> 'a -> 'a t0 = fun ms t z ->
     match t with
     | Empty -> Single z
-    | Single y -> deep ms (One y) Empty (One z)
-    | Deep (_, pr, lazy mid, Four (v,w,x,y)) ->
+    | Single y -> deep ms (One y) lempty (One z)
+    | Deep (_, pr, mid, Four (v,w,x,y)) ->
       deep ms pr
-        (_radd Node.measure mid (Node.mk3 ms v w x))
+        (lazy (_radd Node.measure !!mid (Node.mk3 ms v w x)))
         (Two (y,z))
-    | Deep (_, pr, lazy mid, sf) -> deep ms pr mid (Digit.radd sf z)
+    | Deep (_, pr, mid, sf) -> deep ms pr mid (Digit.radd sf z)
   let radd t a = _radd M.measure t a
 
   let (<@) = radd
@@ -556,26 +558,26 @@ module Make (M: Measurable)
     match t, d with
     | Empty, One a -> Single a
     | Single a, One b
-    | Empty, Two(a,b) -> deep ms (One a) Empty (One b)
+    | Empty, Two(a,b) -> deep ms (One a) lempty (One b)
     | Single a, Two(b,c)
-    | Empty, Three(a,b,c) -> deep ms (Two(a,b)) Empty (One c)
+    | Empty, Three(a,b,c) -> deep ms (Two(a,b)) lempty (One c)
     | Single a, Three(b,c,d)
-    | Empty, Four(a,b,c,d) -> deep ms (Two(a,b)) Empty (Two(c,d))
-    | Single a, Four(b,c,d,e) -> deep ms (Three(a,b,c)) Empty (Two(d,e))
-    | Deep (_, pr, lazy mid, sf), digit ->
+    | Empty, Four(a,b,c,d) -> deep ms (Two(a,b)) lempty (Two(c,d))
+    | Single a, Four(b,c,d,e) -> deep ms (Three(a,b,c)) lempty (Two(d,e))
+    | Deep (_, pr, mid, sf), digit ->
       match Digit.joinr ms sf digit with
       | None, sf' -> deep ms pr mid sf'
       | Some nodes, sf' ->
-        deep ms pr (_radd_digit Node.measure mid nodes) sf'
+        deep ms pr (lazy (_radd_digit Node.measure !!mid nodes)) sf'
 
   let of_digit ms = function
     | Digit.One a -> Single a
     | Two (a, b) ->
-      Deep (ms a + ms b, One a, lempty, One b)
+      Deep (lazy (ms a + ms b), One a, lempty, One b)
     | Three (a, b, c) -> 
-      Deep (ms a + ms b + ms c, Two (a, b), lempty, One c)
+      Deep (lazy (ms a + ms b + ms c), Two (a, b), lempty, One c)
     | Four (a, b, c, d) -> 
-      Deep (ms a + ms b + ms c + ms d, Two (a, b), lempty, Two (c, d))
+      Deep (lazy (ms a + ms b + ms c + ms d), Two (a, b), lempty, Two (c, d))
 
   let rec view_l : 'a. 'a measure -> 'a t0 ->  ('a * 'a t0 Lazy.t) option =
     fun ms t ->
@@ -588,11 +590,10 @@ module Make (M: Measurable)
   and deep_l : 'a. 'a measure -> 'a Digit.t option ->
     'a Node.t t0 Lazy.t -> 'a Digit.t -> 'a t0 Lazy.t =
     fun ms pr mid sf -> lazy (
-      let mid = !!mid in
       match pr with
-      | None -> begin match view_l Node.measure mid with
+      | None -> begin match view_l Node.measure !!mid with
           | None -> of_digit ms sf
-          | Some (a,lazy mid') -> deep ms (Digit.of_node a) mid' sf
+          | Some (a, mid) -> deep ms (Digit.of_node a) mid sf
         end
       | Some pr -> deep ms pr mid sf)
   let lview_lazy t = view_l M.measure t
@@ -624,11 +625,10 @@ module Make (M: Measurable)
   and deep_r :
     'a. 'a measure -> 'a Digit.t -> 'a Node.t t0 Lazy.t -> 'a Digit.t option -> 'a t0 Lazy.t =
     fun ms pr mid sf -> lazy (
-      let mid = !!mid in
       match sf with
-      | None -> begin match view_r Node.measure mid with
+      | None -> begin match view_r Node.measure !!mid with
           | None -> of_digit ms pr
-          | Some (lazy mid', a) ->
+          | Some (mid', a) ->
             deep ms pr mid' (Digit.of_node a)
         end
       | Some sf -> deep ms pr mid sf)
@@ -653,9 +653,9 @@ module Make (M: Measurable)
     | xs, Empty -> _radd_digit ms xs d
     | (Single x), xs -> _ladd ms x (_app3 ms Empty d xs)
     | xs, (Single x) -> _radd ms (_app3 ms xs d Empty) x
-    | Deep (_,pr1,lazy m1,sf1), Deep (_,pr2,lazy m2,sf2) ->
+    | Deep (_,pr1, m1,sf1), Deep (_,pr2, m2,sf2) ->
       deep ms pr1
-        (_app3 Node.measure m1 (Digit.join3 ms sf1 d pr2) m2)
+        (lazy (_app3 Node.measure !!m1 (Digit.join3 ms sf1 d pr2) !!m2))
         sf2
 
   let app3 t1 d t2 = _app3 M.measure t1 d t2
@@ -666,9 +666,9 @@ module Make (M: Measurable)
     | Empty, xs | xs, Empty -> xs
     | (Single x), xs -> _ladd ms x xs
     | xs, (Single x) -> _radd ms xs x
-    | Deep (_,pr1,lazy m1,sf1), Deep (_,pr2,lazy m2,sf2) -> 
+    | Deep (_,pr1, m1,sf1), Deep (_,pr2, m2,sf2) -> 
       deep ms pr1
-         (_app3 Node.measure m1 (Digit.join2 ms sf1 pr2) m2)
+         (lazy (_app3 Node.measure !!m1 (Digit.join2 ms sf1 pr2) !!m2))
         sf2
 
   let join t1 t2 = _join M.measure t1 t2
@@ -774,8 +774,8 @@ module Make (M: Measurable)
     fun ms ~f -> function
       | Empty -> Empty
       | Single x -> Single (f x)
-      | Deep (_, l, lazy m, r) ->
-        let m' = map Node.measure ~f:(fun n -> Node.map ms f n) m in
+      | Deep (_, l, m, r) ->
+        let m' = lazy (map Node.measure ~f:(fun n -> Node.map ms f n) !!m) in
         deep ms (Digit.map f l) m' (Digit.map f r)
 
   let map ~f t = map M.measure ~f t

@@ -1,5 +1,6 @@
 open La_base
 
+
 include Functor.Make(struct
     type 'a elt = 'a
     type monoid = int
@@ -7,6 +8,24 @@ include Functor.Make(struct
     let measure _ = 1
     let add = Int.add
   end)
+
+module T = struct
+  type 'a t = 'a t0
+end         
+
+let pp_debug = pp
+let show_debug = show
+
+let pp pp_el out t =
+  let open Format in
+  let l = to_list t in
+  let pp_list out l =
+    pp_print_list ~pp_sep:(fun out () -> fprintf out ";@ ")
+      pp_el out l in
+  fprintf out "Pseq.of_list@ [@[%a@]]" pp_list l
+
+let show pp_el t =
+  Format.asprintf "%a" (pp pp_el) t
 
 let length t = measure t
 
@@ -139,13 +158,28 @@ let init ~len ~f =
       loop (i+1) (t <@ f i) in
   loop 0 empty
 
-let concat_map2 ~f t =
+let concat_map ~f t =
   let mapped = map ~f t in
-  let rec balance t =
-    match length t with
-    | 0 -> empty
-    | 1 -> hd_left_exn t
-    | n ->
-      let (lazy l, lazy r) = split_unchecked (n / pos_exn 2) t in
+  let rec balance = function
+    | Empty -> Empty
+    | Single a -> a
+    | t ->
+      let len = length t in
+      let (lazy l, lazy r) = split_unchecked (len / Ints.unsafe 2) t in
       balance l >< balance r in
   balance mapped
+
+let rec balance = function
+  | Empty -> Empty
+  | Single _ as t -> t
+  | t ->
+    let len = length t in
+    let (lazy l, lazy r) = split_unchecked (len / Ints.unsafe 2) t in
+    balance l >< balance r
+
+module Monad = Monad.With_functor (struct
+    type 'a t = 'a T.t
+    let return = singleton
+    let bind t f = concat_map ~f t
+    let map = map
+  end)
