@@ -1,2 +1,2 @@
-module Seq = Seq
+module Fseq = Fseq
 module Pqueue = Pqueue
