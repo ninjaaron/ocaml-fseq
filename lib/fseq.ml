@@ -22,7 +22,7 @@ let pp pp_el out t =
   let pp_list out l =
     pp_print_list ~pp_sep:(fun out () -> fprintf out ";@ ") pp_el out l
   in
-  fprintf out "Fseq.(of_list@ [@[%a@]])" pp_list l
+  fprintf out "Fseq<@[%a@]>" pp_list l
 
 let show pp_el t = Format.asprintf "%a" (pp pp_el) t
 let length t = measure t
@@ -56,6 +56,12 @@ let split i t =
   let (lazy l), (lazy r) = split_lazy i t in
   (l, r)
 
+let take n t =
+  let (lazy l), _ = split_lazy n t in l
+
+let drop n t =
+  let _, (lazy r) = split_lazy n t in r
+
 let rotate i t =
   match pos (length t) with
   | None -> t
@@ -81,8 +87,8 @@ let get i t = match get_exn i t with exception _ -> None | value -> Some value
 let insert_unchecked i el t = insert ~p:(( < ) i) el t
 
 let insert_exn i el t =
-  bounds_check i t;
-  insert ~p:(( < ) i) el t
+  if i < 0 || i > length t then invalid_arg "index is out of bounds"
+  else insert ~p:(( < ) i) el t
 
 let insert i el t =
   match insert_exn i el t with exception _ -> None | value -> Some value

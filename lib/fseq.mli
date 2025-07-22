@@ -71,13 +71,13 @@
     # module Fseq = La_fingertree.Fseq;;
     
     # let one_value = Fseq.ladd "foo" Fseq.empty;;
-    val one_value : string Fseq.t = Fseq.(of_list ["foo"])
+    val one_value : string Fseq.t = Fseq<"foo">
 
     # let two_values = ladd "bar" one_value;;
-    val two_values : string Fseq.t = Fseq.(of_list ["bar"; "foo"])
+    val two_values : string Fseq.t = Fseq<"bar"; "foo">
 
     # Fseq.radd two_values "baz";;
-    - : string Fseq.t = Fseq.(of_list ["bar"; "foo"; "baz"])
+    - : string Fseq.t = Fseq<"bar"; "foo"; "baz">
     ]}
 
     Alternatively, [@<] and [>@] are provided for the same purpose.
@@ -86,19 +86,19 @@
     # open Fseq.Operators;;
 
     # let fs = "foo" @< Fseq.empty;;
-    val fs : string Fseq.t = Fseq.(of_list ["foo"])
+    val fs : string Fseq.t = Fseq<"foo">
 
     # fs >@ "bar";;
-    - : string Fseq.t = Fseq.(of_list ["foo"; "bar"])
+    - : string Fseq.t = Fseq<"foo"; "bar">
 
     # "foo" @< "bar" @< Fseq.empty >@ "baz" >@ "qux";;
-    - : string Fseq.t = Fseq.(of_list ["foo"; "bar"; "baz"; "qux"])
+    - : string Fseq.t = Fseq<"foo"; "bar"; "baz"; "qux">
     ]}
 
-    You will notice that the included pretty printer shows how an
-    equivalent sequence would be constructed from a list. This is to
-    keep it as concise as possible. The actual structure of the
-    sequence can be show with additional included pretty printer,
+    You will notice that the included pretty printer represents the
+    sequence as a flat data structure similar to a list or array. This
+    is to keep it as concise as possible. The actual tree structure of
+    the sequence can be show with additional included pretty printer,
     {!pp_debug} and the related string function {!show_debug}.
 
     To "pop" elements from the left and right sides of the list, use
@@ -108,15 +108,15 @@
 
     {@ocaml[
     # let fs = Fseq.init ~len:5 ~f:Fun.id;;
-    val fs : int Fseq.t = Fseq.(of_list [0; 1; 2; 3; 4])
+    val fs : int Fseq.t = Fseq<0; 1; 2; 3; 4>
 
     # Fseq.lview fs;;
     - : (int * int Fseq.t) option =
-    Some (0, Fseq.(of_list [1; 2; 3; 4]))
+    Some (0, Fseq<1; 2; 3; 4>)
 
     # Fseq.rview fs;;
     - : (int Fseq.t * int) option =
-    Some (Fseq.(of_list [0; 1; 2; 3]), 4)
+    Some (Fseq<0; 1; 2; 3>, 4)
     ]}
 
     If you only care about the end and do not wish to compute the
@@ -141,13 +141,13 @@
 
     {@ocaml[
     # let fs = Fseq.init ~len:5 ~f:Fun.id;;
-    val fs : int Fseq.t = Fseq.(of_list [0; 1; 2; 3; 4])
+    val fs : int Fseq.t = Fseq<0; 1; 2; 3; 4>
     
     # Fseq.rotate 2 fs;;
-    - : int Fseq.t = Fseq.(of_list [2; 3; 4; 0; 1])
+    - : int Fseq.t = Fseq<2; 3; 4; 0; 1>
 
     # Fseq.rotate (-1) fs;;
-    - : int Fseq.t = Fseq.(of_list [4; 0; 1; 2; 3])
+    - : int Fseq.t = Fseq<4; 0; 1; 2; 3>
     ]}
 
     Unlike the rotation of a doubly-linked list, where performance is
@@ -163,14 +163,14 @@
 
     {@ocaml[
     # let fs = Fseq.of_list ["OCaml"; "Haskell"; "Clojure"; "F#"];;
-    val fs : string Fseq.t = Fseq.(of_list ["OCaml"; "Haskell"; "Clojure"; "F#"])
+    val fs : string Fseq.t = Fseq<"OCaml"; "Haskell"; "Clojure"; "F#">
     
     # Fseq.get 2 fs;;
     - : string option = Some "Clojure"
     
     # Fseq.set 2 "Scheme" fs;;
     - : string Fseq.t option =
-    Some Fseq.(of_list ["OCaml"; "Haskell"; "Scheme"; "F#"])
+    Some Fseq<"OCaml"; "Haskell"; "Scheme"; "F#">
     ]}
 
     Note that {!set} is not like [Array.set] in that it does not do
@@ -199,14 +199,14 @@
     {@ocaml[
     # Fseq.pop 2 fs;;
     - : (string * string Fseq.t) option =
-    Some ("Clojure", Fseq.(of_list ["OCaml"; "Haskell"; "F#"]))
+    Some ("Clojure", Fseq<"OCaml"; "Haskell"; "F#">)
 
     # Fseq.insert 3 "ReScript" fs;;
     - : string Fseq.t option =
-    Some Fseq.(of_list ["OCaml"; "Haskell"; "Clojure"; "ReScript"; "F#"])
+    Some Fseq<"OCaml"; "Haskell"; "Clojure"; "ReScript"; "F#">
 
     # Fseq.remove 1 fs;;
-    - : string Fseq.t option = Some Fseq.(of_list ["OCaml"; "Clojure"; "F#"])
+    - : string Fseq.t option = Some Fseq<"OCaml"; "Clojure"; "F#">
     ]}
 
     {!pop}, {!insert} and {!remove} also have their accompanying
@@ -222,10 +222,10 @@
 
     {@ocaml[
     # let fs = Fseq.init ~len:10 ~f:Fun.id;;
-    val fs : int Fseq.t = Fseq.(of_list [0; 1; 2; 3; 4; 5; 6; 7; 8; 9])
+    val fs : int Fseq.t = Fseq<0; 1; 2; 3; 4; 5; 6; 7; 8; 9>
 
     # Fseq.slice ~start:2 ~stop:7 fs;;
-    - : int Fseq.t = Fseq.(of_list [2; 3; 4; 5; 6])
+    - : int Fseq.t = Fseq<2; 3; 4; 5; 6>
     ]}
 
     Slicing does not involve a bounds check. Slicing out of bounds
@@ -234,9 +234,9 @@
 
     {@ocaml[
     # Fseq.slice ~start:20 ~stop:30 fs;;
-    - : int Fseq.t = Fseq.(of_list [])
+    - : int Fseq.t = Fseq<>
     # Fseq.slice ~start:5 ~stop:30 fs;;
-    - : int Fseq.t = Fseq.(of_list [5; 6; 7; 8; 9])
+    - : int Fseq.t = Fseq<5; 6; 7; 8; 9>
     ]}
 
     {3 a quick note on balancing}
@@ -307,7 +307,7 @@
     # let b = Fseq.balance fs;;
     [...]
 
-    # Format.printf "%a" (Fseq.pp_debug Format.pp_print_int) b;;
+    # Format.printf "%a\n" (Fseq.pp_debug Format.pp_print_int) b;;
     {[1, 2],
      {[(3, 4, 5), (6, 7, 8)],
       {[((9, 10, 11), (12, 13, 14), (15, 16, 17))],
@@ -335,7 +335,8 @@
           ((184, 185, 186), (187, 188, 189), (190, 191, 192)))]\},
        [((193, 194, 195), (196, 197))]\},
       [(198, 199)]\},
-     [200]\}- : unit = ()
+     [200]\}
+     - : unit = ()
     ]}
 
     Balancing uses a simple divide-and-conquere algorithm and is not a
@@ -355,29 +356,156 @@
 
     {!Fseq.t} is cheap to split and join, with the operations costing
     O(log(n)), similarly to random-access operations.
+
+    {@ocmal[
+    # let fs = Fseq.init ~len:10 ~f:Fun.id;;
+    val fs : int Fseq.t = Fseq<0; 1; 2; 3; 4; 5; 6; 7; 8; 9>
+
+    # let l, r = Fseq.split 5 fs;;
+    val l : int Fseq.t = Fseq<0; 1; 2; 3; 4>
+    val r : int Fseq.t = Fseq<5; 6; 7; 8; 9>
+    
+    # Fseq.join r l;;
+    - : int Fseq.t = Fseq<5; 6; 7; 8; 9; 0; 1; 2; 3; 4>
+
+    # (* there is also a join operator *)
+    # r >< l;;
+    - : int Fseq.t = Fseq<5; 6; 7; 8; 9; 0; 1; 2; 3; 4>
+    ]}
+
+    That's about all there is to join and split. As with slices, split
+    will return one of the sequences empty if the index is out of
+    bounds---because slicing is implemented in terms of splits.
+
+    If you only want one half of the sequence, there are take and
+    drop.
+
+    {@ocaml[
+    # Fseq.take 2 fs;;
+    - : int Fseq.t = Fseq<0; 1>
+    
+    # Fseq.drop 2 fs;;
+    - : int Fseq.t = Fseq<2; 3; 4; 5; 6; 7; 8; 9>
+    ]}
+
+    There are also {!partition} and {!join_with}
+    functions. {!partition} gives the element at the index in addition
+    to splitting. {!join_with} does the opposite.
+
+    {@ocaml[
+    # let Some (l, n, r) =Fseq.partition 7 fs;;
+    val l : int Fseq.t = Fseq<0; 1; 2; 3; 4; 5; 6>
+    val n : int = 7
+    val r : int Fseq.t = Fseq<8; 9>
+
+    # Fseq.join_with r n l;;
+    - : int Fseq.t = Fseq<8; 9; 7; 0; 1; 2; 3; 4; 5; 6>
+    ]}
+
+    As with other indexing operations, {!partition} returns an option,
+    and like other index operations, there are [_exn] and [_unchecked]
+    variants. There is also a {!partition_lazy} where both sides of
+    the sequence are suspended, and this function also has [_exn] and
+    [_unchecked].
+
+    {2 General iteration operations}
+
+    The {!Fseq.t} also has a modest complement of general sequence
+    functions.
+
+    This includes {!fold_right}, {!fold_left}, {!iter}, {!map},
+    {!filter}, {!concat_map}, {!sort}, {!msort}, {!of_list},
+    {!to_list}, {!of_seq}, {!to_seq}, {!rev_to_seq} and {!to_array}.
+
+    There is also a {!Monad} module with both monadic and applicative
+    operations. It works like a list monad, if you're familar witht
+    that (i.e. it's computationally eqivalent to list comprehensions).
+
+    Specifics are detailed in the API documentation. Speaking of...
+
+    {2 API Reference}
 *)
 
 type 'a t
 
 val empty : 'a t
+(** The empty sequence *)
+
 val is_empty : 'a t -> bool
 val length : 'a t -> int
+
+(** {3 Sequence construction} *)
+
 val singleton : 'a -> 'a t
+(** Take a value as input and return a sequence a one-element
+    sequence containing that value *)
+
 val ladd : 'a -> 'a t -> 'a t
+(** Add an element to the left side of a sequence. Like [cons]
+    with a list.  *)
+
 val ( @< ) : 'a -> 'a t -> 'a t
+(** operator version of {!ladd}. Right associative. *)
+
 val radd : 'a t -> 'a -> 'a t
+(** Add an element to the right side of a sequence. Like [snoc]
+    in that "other" functional language. Performance is O(1). *)
+
 val ( >@ ) : 'a t -> 'a -> 'a t
+(** operator version of {!radd}. Left associative. *)
+
 val init : len:int -> f:(int -> 'a) -> 'a t
+(** Initialize a new sequence of length [len] with the result of [f]
+     for each index. *) 
+
 val unfold : f:('a -> ('b * 'a) option) -> init:'a -> 'b t
+(** Unfold a sequence from an initial state. The initial state is
+    passed to [f]. [f] produces either [None], in which case the the
+    sequence is finished, or [Some] of a pair of an element and the
+    next state to passed to [f]. *)
+
 val join : 'a t -> 'a t -> 'a t
+(** join two sequences. Probably should be called "append". *)
+
 val ( >< ) : 'a t -> 'a t -> 'a t
+(** Operator version of join. Left associative. *)
+
 val join_with : 'a t -> 'a -> 'a t -> 'a t
+(** Join two sequences with an element in the middle. *)
+
 val insert : int -> 'a -> 'a t -> 'a t option
+(** Insert an element at the given index. *)
+
+(** {3 Restructuring operations} *)
+
 val set : int -> 'a -> 'a t -> 'a t option
+(** Change the element at the given index. *)
+
 val balance : 'a t -> 'a t
+(** Balance the internal tree. Normally unecessary, but may improve
+    index operations on very large trees in some cases. The balancing
+    operation itself is not that cheap, so use with extreme
+    prejudice. *)
+
 val msort : cmp:('a -> 'a -> int) -> 'a t -> 'a t
+(** Merge sort with stable sort time. *)
+
 val sort : cmp:('a -> 'a -> int) -> 'a t -> 'a t
+(** Sorting algorithm loosely based on quicksort, but it's not
+    in-place. Don't expect miracles. Generally faster than merge sort,
+    but worse in the worst case. *)
+
+val rotate : int -> 'a t -> 'a t
+(** Deque rotation (not matrix rotation). A positive integer rotates
+    towards the left. A negative integer rotates towards the right. *)
+
+(** {3 destructuring operations} *)
+
 val lview : 'a t -> ('a * 'a t) option
+(** "Uncons" on the left side of the sequence. Returns [None] on an
+    empty seqnece and [Some] of a pair of an element and the remaining
+    sequence. *)
+
 val lview_lazy : 'a t -> ('a * 'a t Lazy.t) option
 val rview : 'a t -> ('a t * 'a) option
 val rview_lazy : 'a t -> ('a t Lazy.t * 'a) option
@@ -387,8 +515,8 @@ val get : int -> 'a t -> 'a option
 val partition : int -> 'a t -> ('a t * 'a * 'a t) option
 val partition_lazy : int -> 'a t -> ('a t Lazy.t * 'a * 'a t Lazy.t) option
 val split : int -> 'a t -> 'a t * 'a t
-val split_lazy : int -> 'a t -> 'a t Lazy.t * 'a t Lazy.t
-val rotate : int -> 'a t -> 'a t
+val take : int -> 'a t -> 'a t
+val drop : int -> 'a t -> 'a t
 val slice : start:int -> stop:int -> 'a t -> 'a t
 val pop : int -> 'a t -> ('a * 'a t) option
 val remove : int -> 'a t -> 'a t option
