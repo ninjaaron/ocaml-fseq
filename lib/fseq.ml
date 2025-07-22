@@ -22,7 +22,7 @@ let pp pp_el out t =
   let pp_list out l =
     pp_print_list ~pp_sep:(fun out () -> fprintf out ";@ ") pp_el out l
   in
-  fprintf out "Fseq.of_list@ [@[%a@]]" pp_list l
+  fprintf out "Fseq.(of_list@ [@[%a@]])" pp_list l
 
 let show pp_el t = Format.asprintf "%a" (pp pp_el) t
 let length t = measure t
@@ -67,8 +67,8 @@ let rotate i t =
     r >< l
 
 let slice ~start ~stop t =
-  let (_, lazy rest) = split_lazy start t in
-  let (lazy slice, _) = split_lazy stop rest in
+  let (lazy rest, _) = split_lazy stop t in
+  let (_, lazy slice) = split_lazy start rest in
   slice
 
 let get_unchecked i t = get ~p:(( < ) i) t
@@ -77,7 +77,7 @@ let get_exn i t =
   bounds_check i t;
   get_unchecked i t
 
-let get i t = match get i t with exception _ -> None | value -> Some value
+let get i t = match get_exn i t with exception _ -> None | value -> Some value
 let insert_unchecked i el t = insert ~p:(( < ) i) el t
 
 let insert_exn i el t =
@@ -87,7 +87,7 @@ let insert_exn i el t =
 let insert i el t =
   match insert_exn i el t with exception _ -> None | value -> Some value
 
-let set_unchecked i el t = update ~p:(( < ) i) el t
+let set_unchecked i el t = set ~p:(( < ) i) el t
 
 let set_exn i el t =
   bounds_check i t;

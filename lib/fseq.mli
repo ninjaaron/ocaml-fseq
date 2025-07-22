@@ -33,7 +33,7 @@
 
     {!Fseq.t} is based on the random access sequence presented in
     {{:https://www.staff.city.ac.uk/~ross/papers/FingerTree.html}
-    Finger Trees: A Simple General-purpose Data Structure} (2006 Hinze
+    Finger Trees: A Simple General-purpose Data Structure} (2006, Hinze
     and Paterson, {i Journal of Functional Programming}). It
     implements most of the optimizations suggested in the paper,
     including laziness in the computation of the spine to preserve
@@ -67,32 +67,32 @@
     You can add values to the left (or front) of the sequence with
     {!ladd} and to the right (or back) with {!radd}.
 
-    {ocaml[
+    {@ocaml[
     # module Fseq = La_fingertree.Fseq;;
     
     # let one_value = Fseq.ladd "foo" Fseq.empty;;
-    val one_value : string Fseq.t = Fseq.of_list ["foo"]
+    val one_value : string Fseq.t = Fseq.(of_list ["foo"])
 
     # let two_values = ladd "bar" one_value;;
-    val two_values : string Fseq.t = Fseq.of_list ["bar"; "foo"]
+    val two_values : string Fseq.t = Fseq.(of_list ["bar"; "foo"])
 
     # Fseq.radd two_values "baz";;
-    - : string Fseq.t = Fseq.of_list ["bar"; "foo"; "baz"]
+    - : string Fseq.t = Fseq.(of_list ["bar"; "foo"; "baz"])
     ]}
 
     Alternatively, [@<] and [>@] are provided for the same purpose.
     
-    {ocaml[
+    {@ocaml[
     # open Fseq.Operators;;
 
     # let fs = "foo" @< Fseq.empty;;
-    val fs : string Fseq.t = Fseq.of_list ["foo"]
+    val fs : string Fseq.t = Fseq.(of_list ["foo"])
 
     # fs >@ "bar";;
-    - : string Fseq.t = Fseq.of_list ["foo"; "bar"]
+    - : string Fseq.t = Fseq.(of_list ["foo"; "bar"])
 
     # "foo" @< "bar" @< Fseq.empty >@ "baz" >@ "qux";;
-    - : string Fseq.t = Fseq.of_list ["foo"; "bar"; "baz"; "qux"]
+    - : string Fseq.t = Fseq.(of_list ["foo"; "bar"; "baz"; "qux"])
     ]}
 
     You will notice that the included pretty printer shows how an
@@ -106,24 +106,24 @@
     return [None] and if not, they return [Some] of a pair consiting
     of the end element and the remaining sequence.
 
-    {ocaml[
+    {@ocaml[
     # let fs = Fseq.init ~len:5 ~f:Fun.id;;
-    val fs : int Fseq.t = Fseq.of_list [0; 1; 2; 3; 4]
+    val fs : int Fseq.t = Fseq.(of_list [0; 1; 2; 3; 4])
 
     # Fseq.lview fs;;
     - : (int * int Fseq.t) option =
-    Some (0, Fseq.of_list [1; 2; 3; 4])
+    Some (0, Fseq.(of_list [1; 2; 3; 4]))
 
     # Fseq.rview fs;;
     - : (int Fseq.t * int) option =
-    Some (Fseq.of_list [0; 1; 2; 3], 4)
+    Some (Fseq.(of_list [0; 1; 2; 3]), 4)
     ]}
 
     If you only care about the end and do not wish to compute the
     remaining sequence (not expensive, but not free either), there are
     two ways to avoid this:
 
-    {ocaml[
+    {@ocaml[
     # Fseq.lview_lazy fs;;
     - : (int * int Fseq.t lazy_t) option = Some (0, <lazy>)
 
@@ -137,21 +137,224 @@
     only the end element and throw [Invalid_argument] if the sequence
     is empty.
 
-    Rotation is also provided:
+    Deque rotation (not matrix rotation) is also provided:
 
-    {ocaml[
+    {@ocaml[
+    # let fs = Fseq.init ~len:5 ~f:Fun.id;;
+    val fs : int Fseq.t = Fseq.(of_list [0; 1; 2; 3; 4])
+    
     # Fseq.rotate 2 fs;;
-    - : int Fseq.t = Fseq.of_list [2; 3; 4; 0; 1]
+    - : int Fseq.t = Fseq.(of_list [2; 3; 4; 0; 1])
 
     # Fseq.rotate (-1) fs;;
-    - : int Fseq.t = Fseq.of_list [4; 0; 1; 2; 3]
+    - : int Fseq.t = Fseq.(of_list [4; 0; 1; 2; 3])
     ]}
 
     Unlike the rotation of a doubly-linked list, where performance is
     proportional to the size of the rotation, rotating a sequence
     always preforms exactly one {!split} and one {!join}.
 
-    {2 Usage as a random-access sequence}
+    {2 Usage as a random-access sequence (i.e. a functional
+    alternative to arrays)}
+
+    For basic usage {!Fseq.t} provides {!get} and {!set}
+    operations. These operations return [None] if the index is out of
+    bounds.
+
+    {@ocaml[
+    # let fs = Fseq.of_list ["OCaml"; "Haskell"; "Clojure"; "F#"];;
+    val fs : string Fseq.t = Fseq.(of_list ["OCaml"; "Haskell"; "Clojure"; "F#"])
+    
+    # Fseq.get 2 fs;;
+    - : string option = Some "Clojure"
+    
+    # Fseq.set 2 "Scheme" fs;;
+    - : string Fseq.t option =
+    Some Fseq.(of_list ["OCaml"; "Haskell"; "Scheme"; "F#"])
+    ]}
+
+    Note that {!set} is not like [Array.set] in that it does not do
+    in-place modification, but produces a new sequence with the
+    updated value.
+
+    If you prefer an [Invalid_argument] exception instead of an
+    option, {!get_exn} and {!set_exn} are available.
+
+    Likewise, if you know your index is in bounds, checks may be
+    omitted with {!get_unchecked} and {!set_unchecked}. The bounds
+    check quite cheap relative to the cost of the actual lookup, so
+    there is generally little reason to leave it out. Unchecked
+    operations in this library are not unsafe in the same way as
+    unsafe array indexing and will never access other regions of
+    memory, but they probably also don't do what you want. Indexing
+    beyond the end of a sequence will return its last element, while
+    giving a negative index will access the first element of the
+    sequence. Therefore, bounds checks in this case are not for
+    safety, but to alert you that you probably did something you did
+    not intend to do.
+
+    Some random-access operations which do not exist for arrays (at
+    least in OCaml) are also provided.
+
+    {@ocaml[
+    # Fseq.pop 2 fs;;
+    - : (string * string Fseq.t) option =
+    Some ("Clojure", Fseq.(of_list ["OCaml"; "Haskell"; "F#"]))
+
+    # Fseq.insert 3 "ReScript" fs;;
+    - : string Fseq.t option =
+    Some Fseq.(of_list ["OCaml"; "Haskell"; "Clojure"; "ReScript"; "F#"])
+
+    # Fseq.remove 1 fs;;
+    - : string Fseq.t option = Some Fseq.(of_list ["OCaml"; "Clojure"; "F#"])
+    ]}
+
+    {!pop}, {!insert} and {!remove} also have their accompanying
+    [_exn] and [_unchecked] flavors. Recall once again that these
+    operations do not modify the sequence in place, but always produce
+    a new sequence.
+
+    Slicing is also implemented.
+
+    Slices are more of a split operation and properly belong to the
+    section on splits and joins, but I include it here because it is
+    an operation frequently associated with arrays.
+
+    {@ocaml[
+    # let fs = Fseq.init ~len:10 ~f:Fun.id;;
+    val fs : int Fseq.t = Fseq.(of_list [0; 1; 2; 3; 4; 5; 6; 7; 8; 9])
+
+    # Fseq.slice ~start:2 ~stop:7 fs;;
+    - : int Fseq.t = Fseq.(of_list [2; 3; 4; 5; 6])
+    ]}
+
+    Slicing does not involve a bounds check. Slicing out of bounds
+    creates an empty sequence. Slicing where only one part of the
+    slice is out of bounds will include as many elements as available.
+
+    {@ocaml[
+    # Fseq.slice ~start:20 ~stop:30 fs;;
+    - : int Fseq.t = Fseq.(of_list [])
+    # Fseq.slice ~start:5 ~stop:30 fs;;
+    - : int Fseq.t = Fseq.(of_list [5; 6; 7; 8; 9])
+    ]}
+
+    {3 a quick note on balancing}
+
+    The internal structure of the sequence provides some invariants
+    which keep the tree from becoming too unbalanced (relative to
+    binary search trees). The right and left sides of the tree will
+    always be of equal depths. Balancing makes no difference for deque
+    and iteration operations, for example.
+
+    However, While an unbalanced finger tree has the same depth on
+    either side, the size of the digits can be variable, leading to a
+    few more predicate checks on the side of the tree with longer
+    digits for index-based operations. It does not lead to linear
+    pileup as with a binary tree, but if you have a very large
+    sequence and plan to do large number of lookups, balancing the
+    tree could provide better worst-case bounds and might be worthwhile.
+
+    For this reason, a {!balance} functiong is included. As mentioned
+    earlier, if you want to see how the tree looks internally, there
+    are special debug print functions, {!pp_debug} and {!show_debug} for
+    these purposes. If you are familiar with the implemetation of
+    finger trees, trees are enclosed in curly braces [{}], digits are
+    enclosed in square brackets [[]], and nodes are enclosed in
+    parentheses [()].
+
+    A backslash is included before closeing [}] in this documentation
+    to keep odoc (the ocaml documentation builder) from freaking
+    out. This is not part of actual output.
+
+    {@ocaml[
+    # let fs = Fseq.init ~len:200 ~f:succ;;
+    [...]
+
+    # Format.printf "%a" (Fseq.pp_debug Format.pp_print_int) fs;;
+    {[1],
+     {[(2, 3, 4)],
+      {[((5, 6, 7), (8, 9, 10), (11, 12, 13))],
+       {[(((14, 15, 16), (17, 18, 19), (20, 21, 22)),
+          ((23, 24, 25), (26, 27, 28), (29, 30, 31)),
+          ((32, 33, 34), (35, 36, 37), (38, 39, 40)))],
+        {\},
+        [(((41, 42, 43), (44, 45, 46), (47, 48, 49)),
+          ((50, 51, 52), (53, 54, 55), (56, 57, 58)),
+          ((59, 60, 61), (62, 63, 64), (65, 66, 67))),
+         (((68, 69, 70), (71, 72, 73), (74, 75, 76)),
+          ((77, 78, 79), (80, 81, 82), (83, 84, 85)),
+          ((86, 87, 88), (89, 90, 91), (92, 93, 94))),
+         (((95, 96, 97), (98, 99, 100), (101, 102, 103)),
+          ((104, 105, 106), (107, 108, 109), (110, 111, 112)),
+          ((113, 114, 115), (116, 117, 118), (119, 120, 121))),
+         (((122, 123, 124), (125, 126, 127), (128, 129, 130)),
+          ((131, 132, 133), (134, 135, 136), (137, 138, 139)),
+          ((140, 141, 142), (143, 144, 145), (146, 147, 148)))]\},
+       [((149, 150, 151), (152, 153, 154), (155, 156, 157)),
+        ((158, 159, 160), (161, 162, 163), (164, 165, 166)),
+        ((167, 168, 169), (170, 171, 172), (173, 174, 175)),
+        ((176, 177, 178), (179, 180, 181), (182, 183, 184))]\},
+      [(185, 186, 187), (188, 189, 190), (191, 192, 193), (194, 195, 196)]\},
+     [197, 198, 199, 200]\}- : unit = ()
+    ]}
+
+    You can see that this tree is not espeially well balanced and
+    worst-case lookup times may suffer slightly as a result. However,
+    this can be fixed:
+    
+    {@ocaml[
+    # let b = Fseq.balance fs;;
+    [...]
+
+    # Format.printf "%a" (Fseq.pp_debug Format.pp_print_int) b;;
+    {[1, 2],
+     {[(3, 4, 5), (6, 7, 8)],
+      {[((9, 10, 11), (12, 13, 14), (15, 16, 17))],
+       {[(((18, 19, 20), (21, 22)), ((23, 24), (25, 26, 27)))],
+        {[((((28, 29, 30), (31, 32, 33)),
+            ((34, 35, 36), (37, 38, 39), (40, 41, 42))),
+           (((43, 44, 45), (46, 47)), ((48, 49), (50, 51, 52))))],
+         {[(((((53, 54, 55), (56, 57, 58)),
+              ((59, 60, 61), (62, 63, 64), (65, 66, 67))),
+             (((68, 69, 70), (71, 72)), ((73, 74), (75, 76, 77)))),
+            ((((78, 79, 80), (81, 82, 83)),
+              ((84, 85, 86), (87, 88, 89), (90, 91, 92))),
+             (((93, 94, 95), (96, 97)), ((98, 99), (100, 101, 102)))))],
+          {\},
+          [(((((103, 104, 105), (106, 107, 108)),
+              ((109, 110, 111), (112, 113, 114), (115, 116, 117))),
+             (((118, 119, 120), (121, 122)), ((123, 124), (125, 126, 127)))),
+            ((((128, 129, 130), (131, 132, 133)),
+              ((134, 135, 136), (137, 138, 139), (140, 141, 142))),
+             (((143, 144, 145), (146, 147)), ((148, 149), (150, 151, 152)))))]\},
+         [((((153, 154, 155), (156, 157, 158)),
+            ((159, 160, 161), (162, 163, 164), (165, 166, 167))),
+           (((168, 169, 170), (171, 172)), ((173, 174), (175, 176, 177))))]\},
+        [(((178, 179, 180), (181, 182, 183)),
+          ((184, 185, 186), (187, 188, 189), (190, 191, 192)))]\},
+       [((193, 194, 195), (196, 197))]\},
+      [(198, 199)]\},
+     [200]\}- : unit = ()
+    ]}
+
+    Balancing uses a simple divide-and-conquere algorithm and is not a
+    particularly cheap operation---it is possible a more efficient
+    algorithm could be devised---but it is not normally necessary, so
+    profile your code with and without balancing to see if it is a net
+    gain for your usecase.
+
+    Because it is not necessary in most cases, none of the operations
+    in this library implicitly balance except for {!concat_map} and
+    the {!Monad} operations, since these operations may produce very
+    long sequences and the cost of balancing is not much extra because
+    it is already a highly concatenative operation---though it does
+    make them a bit slower for smaller outputs.
+
+    {2 Splits and Joins}
+
+    {!Fseq.t} is cheap to split and join, with the operations costing
+    O(log(n)), similarly to random-access operations.
 *)
 
 type 'a t
@@ -180,7 +383,7 @@ val rview : 'a t -> ('a t * 'a) option
 val rview_lazy : 'a t -> ('a t Lazy.t * 'a) option
 val tl_left : 'a t -> 'a t
 val tl_right : 'a t -> 'a t
-val get : ('a -> 'b) t -> 'a -> (p:(int -> bool) -> 'b) option
+val get : int -> 'a t -> 'a option
 val partition : int -> 'a t -> ('a t * 'a * 'a t) option
 val partition_lazy : int -> 'a t -> ('a t Lazy.t * 'a * 'a t Lazy.t) option
 val split : int -> 'a t -> 'a t * 'a t

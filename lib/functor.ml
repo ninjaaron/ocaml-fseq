@@ -24,6 +24,7 @@ end
 
 module type S = sig
   type monoid
+  type 'a measure = 'a -> monoid
 
   module Node : sig
     type 'a t = N2 of monoid * 'a * 'a | N3 of monoid * 'a * 'a * 'a
@@ -34,6 +35,8 @@ module type S = sig
       (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
 
     val show : (Format.formatter -> 'a -> unit) -> 'a t -> string
+    val mk2 : 'a measure -> 'a -> 'a -> 'a t
+    val mk3 : 'a measure -> 'a -> 'a -> 'a -> 'a t
   end
 
   module Digit : sig
@@ -47,6 +50,7 @@ module type S = sig
       (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
 
     val show : (Format.formatter -> 'a -> unit) -> 'a t -> string
+    val of_node : 'a Node.t -> 'a t
   end
 
   type +'a t0 =
@@ -98,7 +102,7 @@ module type S = sig
   val split : p:(monoid -> bool) -> 'a t -> 'a t Lazy.t * 'a t Lazy.t
   val get : p:(monoid -> bool) -> 'a t -> 'a elt
   val insert : p:(monoid -> bool) -> 'a elt -> 'a t -> 'a t
-  val update : p:(monoid -> bool) -> 'a elt -> 'a t -> 'a t
+  val set : p:(monoid -> bool) -> 'a elt -> 'a t -> 'a t
   val pop : p:(monoid -> bool) -> 'a t -> 'a elt * 'a t
   val remove : p:(monoid -> bool) -> 'a t -> 'a t
   val of_list : 'a elt list -> 'a t
@@ -767,7 +771,7 @@ module Make (M : Measurable) :
     let (Split (l, el, r)) = _split M.measure p M.null t in
     _app3 M.measure !!l (Two (x, el)) !!r
 
-  let update ~p x t =
+  let set ~p x t =
     let (Split (l, _, r)) = _split M.measure p M.null t in
     _app3 M.measure !!l (One x) !!r
 
