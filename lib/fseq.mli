@@ -442,8 +442,8 @@ val length : 'a t -> int
 (** {3 Construction operations} *)
 
 val singleton : 'a -> 'a t
-(** Take a value as input and return a sequence a one-element
-    sequence containing that value *)
+(** Take a value as input and return a one-element sequence containing
+    that value *)
 
 val ladd : 'a -> 'a t -> 'a t
 (** Add an element to the left side of a sequence. Like [cons]
