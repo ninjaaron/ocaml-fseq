@@ -17,7 +17,7 @@
       not as good of a stack as a basic linked list. However, it might
       might be better in some scenarios because getting the length is
       O(1), so, for example, it might be better for incrementally
-      building up and converting to an array---though you may want to
+      building up and converting to an array--though you may want to
       benchmark to see if the standard library [Dynarray] is more
       suitable in your usecase.
 
@@ -206,13 +206,17 @@
     Some Fseq<"OCaml"; "Haskell"; "Clojure"; "ReScript"; "F#">
 
     # Fseq.remove 1 fs;;
-    - : string Fseq.t option = Some Fseq<"OCaml"; "Clojure"; "F#">
+    - : string Fseq.t = Fseq<"OCaml"; "Clojure"; "F#">
     ]}
 
     {!pop}, {!insert} and {!remove} also have their accompanying
     [_exn] and [_unchecked] flavors. Recall once again that these
     operations do not modify the sequence in place, but always produce
-    a new sequence.
+    a new sequence. Note that {!remove} with an out-of-bounds index
+    returns the same sequence. {!remove_exn} raises if the index is
+    out of bounds. {!remove_unchecked} will remove {i something}, but
+    not at the specified index. (the first or last element, depending
+    whether the index is below or above the bounds, respectively)
 
     Slicing is also implemented.
 
@@ -340,8 +344,8 @@
     ]}
 
     Balancing uses a simple divide-and-conquere algorithm and is not a
-    particularly cheap operation---it is possible a more efficient
-    algorithm could be devised---but it is not normally necessary, so
+    particularly cheap operation--it is possible a more efficient
+    algorithm could be devised--but it is not normally necessary, so
     profile your code with and without balancing to see if it is a net
     gain for your usecase.
 
@@ -349,7 +353,7 @@
     in this library implicitly balance except for {!concat_map} and
     the {!Monad} operations, since these operations may produce very
     long sequences and the cost of balancing is not much extra because
-    it is already a highly concatenative operation---though it does
+    it is already a highly concatenative operation--though it does
     make them a bit slower for smaller outputs.
 
     {2 Splits and Joins}
@@ -375,7 +379,7 @@
 
     That's about all there is to join and split. As with slices, split
     will return one of the sequences empty if the index is out of
-    bounds---because slicing is implemented in terms of splits.
+    bounds--because slicing is implemented in terms of splits.
 
     If you only want one half of the sequence, there are take and
     drop.
@@ -433,8 +437,9 @@ val empty : 'a t
 
 val is_empty : 'a t -> bool
 val length : 'a t -> int
+(** {!Fseq.t} keeps track of length, so this operation is O(1) *)
 
-(** {3 Sequence construction} *)
+(** {3 Construction operations} *)
 
 val singleton : 'a -> 'a t
 (** Take a value as input and return a sequence a one-element
@@ -497,9 +502,10 @@ val sort : cmp:('a -> 'a -> int) -> 'a t -> 'a t
 
 val rotate : int -> 'a t -> 'a t
 (** Deque rotation (not matrix rotation). A positive integer rotates
-    towards the left. A negative integer rotates towards the right. *)
+    towards the left. A negative integer rotates towards the
+    right. Over-rotation is permitted. *)
 
-(** {3 destructuring operations} *)
+(** {3 Destructuring operations} *)
 
 val lview : 'a t -> ('a * 'a t) option
 (** "Uncons" on the left side of the sequence. Returns [None] on an
@@ -507,42 +513,147 @@ val lview : 'a t -> ('a * 'a t) option
     sequence. *)
 
 val lview_lazy : 'a t -> ('a * 'a t Lazy.t) option
+(** Same as {!lview}, but lazy in the tail *)
+
 val rview : 'a t -> ('a t * 'a) option
+(** Uncons from the right side of the sequence (or "unsnoc", if you
+    like). Returns [None] on an empty sequence and [Some] of a pair of
+    an element and the remaining sequence. *)
+
 val rview_lazy : 'a t -> ('a t Lazy.t * 'a) option
+(** Same as {!rview}, but lazy in the tail *)
+
 val tl_left : 'a t -> 'a t
+(** Remomve the left-most element and return the rest of the
+    sequence. An empty input returns empty. *)
+
 val tl_right : 'a t -> 'a t
+(** Remomve the right-most element and return the rest of the
+    sequence. An empty input returns empty. *)
+
 val get : int -> 'a t -> 'a option
+(** Retrieve the element at the given index. Returns [None] if the
+    index is out of bounds and [Some] of the element otherwise. *)
+
 val partition : int -> 'a t -> ('a t * 'a * 'a t) option
+(** Split the sequence on the index and give the element at that
+    index. Returns [None] if the index is out of bounds or the
+    sequence is empty and [Some] of a triple of left side, element,
+    right side otherwise. *)
+
 val partition_lazy : int -> 'a t -> ('a t Lazy.t * 'a * 'a t Lazy.t) option
+(** Same as {!partition}, but lazy in the left and right sides. *)
+
 val split : int -> 'a t -> 'a t * 'a t
+(** Split the sequence at the given index. If the index is out of
+    bounds, one of the sides will be empty. Empty input will produce
+    both sides empty. *)
+
 val take : int -> 'a t -> 'a t
+(** Take elements up to the given index. *)
+
 val drop : int -> 'a t -> 'a t
+(** Drop elements up to the given index. *)
+
 val slice : start:int -> stop:int -> 'a t -> 'a t
+(** Return elements between the start and stop indices. *)
+
 val pop : int -> 'a t -> ('a * 'a t) option
-val remove : int -> 'a t -> 'a t option
+(** If the given index is out of range, return [None]. Otherwise,
+    remove the element from the sequence and return [Some] of the
+    element and the remaining sequence. *)
+
+val remove : int -> 'a t -> 'a t
+(** Remove the element at the given index. If the index is out of
+    range, the sequence is unchanged. *)
+
+(** {3 Iterative operations}
+
+    I won't take much time to explain these, since I assume most OCaml
+    programmers are familiar with them. If not, check out standard
+    library documentation for [List] or [Array] or [Seq] which all have
+    all of these.
+
+    There are not many of these functions because we have [Seq] in the
+    standard library, and you can simply wrap {!Fseq.t} with {!to_seq}
+    to use a huge number of them. *)
+
 val fold_right : f:('a -> 'b -> 'b) -> 'a t -> init:'b -> 'b
+(** Note that, while right fold is somewhat inadvisable with regular
+    OCaml lists because it is not tail recursive, [Fseq.fold_right]
+    doesn't have this problem. That is, it's not tail recursive (nor
+    are any of these iteration functions), but it's tree traversal so
+    the stack depth is much smaller. You would likely exhaust your RAM
+    before the stack limit is reached. *)
+
 val fold_left : f:('b -> 'a -> 'b) -> init:'b -> 'a t -> 'b
 val fold : f:('b -> 'a -> 'b) -> init:'b -> 'a t -> 'b
+(** An alias for fold_left because I am lazy about typing. *)
+
 val iter : f:('a -> unit) -> 'a t -> unit
 val map : f:('a -> 'b) -> 'a t -> 'b t
+(** Note well that {b [map] does not operated over elements in
+    order}. The output is in order, but mapping over the spine is
+    suspended. If you have side effects in [f], they {i will} happen
+    out of order, starting at the ends of the sequence and working
+    inward.
+
+    The reason for this is that spine of the finger tree is always
+    lazy. I would be possible in a way that all applications of [f]
+    occur in the order of elements in the sequence, but I found it cool
+    to allow this computation to be suspended. Plus, if you're putting
+    side effects in your mapped function, what are you doing with your
+    life? We do functional programming here. *)
+
 val filter : f:('a -> bool) -> 'a t -> 'a t
+val filter_map : f:('a -> 'b option) -> 'a t -> 'b t
 val concat_map : f:('a -> 'b t) -> 'a t -> 'b t
+
+(** {3 Converstion operations} *)
 val of_list : 'a list -> 'a t
 val to_list : 'a t -> 'a list
 val of_seq : 'a Seq.t -> 'a t
 val to_seq : 'a t -> 'a Seq.t
 val rev_to_seq : 'a t -> 'a Seq.t
+(** Creates an instance of [Seq.t] which iterates over sequence
+    elements from right to left *)
+
 val to_array : 'a t -> 'a array
+(** I included {!to_array} because because the implementation is not a
+    one-liner, and a sequence is a nice for coversion to an array
+    because getting the length is O(1).
+
+    There is no [of_array]. It's a one-liner if you need it:
+
+    {@ocaml[
+    let of_array a = Array.fold_left Fseq.radd Fseq.empty a
+    ]}
+
+    Conversion from most other types is as simple as this. *)
+
+(** {3 Pretty printing} *)
 
 val pp : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
 [@@ocaml.toplevel_printer]
+(** Displays {!Fseq.t} as a flat sequence. For use with the print
+   functions in the [Format] library. *)
 
 val show : (Format.formatter -> 'a -> unit) -> 'a t -> string
+(** Same as {!pp} but returns a string instead of printing *)
 
 val pp_debug :
   (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
+(** Displays the structure of the finger tree. Mostly for my own use
+    while developing the library, but I made it public in case others
+    are interested in the structure. Might also be useful for making
+    a decision about whether {!balance} would be useful in your
+    code. HINT: It probably isn't. *)
 
 val show_debug : (Format.formatter -> 'a -> unit) -> 'a t -> string
+(** Same as {!pp_debug} but returns a string instead of printing *)
+
+(** {3 Operations which throw exceptions for out-of-bounds lookups} *)
+
 val set_exn : int -> 'a -> 'a t -> 'a t
 val insert_exn : int -> 'a -> 'a t -> 'a t
 val hd_left_exn : 'a t -> 'a
@@ -552,6 +663,9 @@ val partition_exn : int -> 'a t -> 'a t * 'a * 'a t
 val partition_lazy_exn : int -> 'a t -> 'a t Lazy.t * 'a * 'a t Lazy.t
 val pop_exn : int -> 'a t -> 'a * 'a t
 val remove_exn : int -> 'a t -> 'a t
+
+(** {3 Operations which don't do bounds checks} *)
+
 val set_unchecked : int -> 'a -> 'a t -> 'a t
 val insert_unchecked : int -> 'a -> 'a t -> 'a t
 val get_unchecked : int -> 'a t -> 'a
@@ -560,12 +674,19 @@ val partition_lazy_unchecked : int -> 'a t -> 'a t Lazy.t * 'a * 'a t Lazy.t
 val pop_unchecked : int -> 'a t -> 'a * 'a t
 val remove_unchecked : int -> 'a t -> 'a t
 
+(** {3 Modules} *)
+
+(** A module with only the operators so you can open it without
+    poluting your namespace *)
 module Operators : sig
   val ( @< ) : 'a -> 'a t -> 'a t
   val ( >@ ) : 'a t -> 'a -> 'a t
   val ( >< ) : 'a t -> 'a t -> 'a t
 end
 
+(** A module with monad and applicative operations based on
+    concat_map. It is computationally equivalent to list
+    comprehensions in other languages. *)
 module Monad : sig
   val bind : 'a t -> ('a -> 'b t) -> 'b t
   val return : 'a -> 'a t

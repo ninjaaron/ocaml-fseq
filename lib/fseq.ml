@@ -53,8 +53,7 @@ let partition i t =
 let split_lazy i t = split ~p:(( < ) i) t
 
 let split i t =
-  let (lazy l), (lazy r) = split_lazy i t in
-  (l, r)
+    let lazy l, lazy r = split_lazy i t in l, r
 
 let take n t =
   let (lazy l), _ = split_lazy n t in l
@@ -116,7 +115,7 @@ let remove_exn i t =
   remove_unchecked i t
 
 let remove i t =
-  match remove_exn i t with exception _ -> None | value -> Some value
+  match remove_exn i t with exception _ -> t | t' -> t'
 
 let merge ~cmp =
   let rec loop out t1 t2 =
