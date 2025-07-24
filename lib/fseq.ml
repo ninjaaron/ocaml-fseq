@@ -53,27 +53,30 @@ let partition i t =
 let split_lazy i t = split ~p:(( < ) i) t
 
 let split i t =
-    let lazy l, lazy r = split_lazy i t in l, r
+  let (lazy l), (lazy r) = split_lazy i t in
+  (l, r)
 
 let take n t =
-  let (lazy l), _ = split_lazy n t in l
+  let (lazy l), _ = split_lazy n t in
+  l
 
 let drop n t =
-  let _, (lazy r) = split_lazy n t in r
+  let _, (lazy r) = split_lazy n t in
+  r
 
 let rotate i t =
   match pos (length t) with
   | None -> t
   | Some len ->
-    let i' = match i < 0 with
-    | true -> int len + (i mod len)
-    | false -> i mod len in
-    let l, r = split i' t in
-    r >< l
+      let i' =
+        match i < 0 with true -> int len + (i mod len) | false -> i mod len
+      in
+      let l, r = split i' t in
+      r >< l
 
 let slice ~start ~stop t =
-  let (lazy rest, _) = split_lazy stop t in
-  let (_, lazy slice) = split_lazy start rest in
+  let (lazy rest), _ = split_lazy stop t in
+  let _, (lazy slice) = split_lazy start rest in
   slice
 
 let get_unchecked i t = get ~p:(( < ) i) t
@@ -114,8 +117,7 @@ let remove_exn i t =
   bounds_check i t;
   remove_unchecked i t
 
-let remove i t =
-  match remove_exn i t with exception _ -> t | t' -> t'
+let remove i t = match remove_exn i t with exception _ -> t | t' -> t'
 
 let merge ~cmp =
   let rec loop out t1 t2 =
@@ -166,31 +168,13 @@ let to_array t =
   match length t with
   | 0 -> [||]
   | len ->
-    let v = hd_left_exn t in
-    let a = Array.make len v in
-    ignore @@ fold_left ~init:0 t
-      ~f:(fun i el -> Array.unsafe_set a i el; succ i);
-    a
-
-let concat_map ~f t =
-  let mapped = map ~f t in
-  let rec balance = function
-    | Empty -> Empty
-    | Single a -> a
-    | t ->
-        let len = length t in
-        let l, r = split (len / Ints.unsafe 2) t in
-        balance l >< balance r
-  in
-  balance mapped
-
-let rec balance = function
-  | Empty -> Empty
-  | Single _ as t -> t
-  | t ->
-      let len = length t in
-      let l, r = split (len / Ints.unsafe 2) t in
-      balance l >< balance r
+      let v = hd_left_exn t in
+      let a = Array.make len v in
+      ignore
+      @@ fold_left ~init:0 t ~f:(fun i el ->
+             Array.unsafe_set a i el;
+             succ i);
+      a
 
 module Monad = Monad.With_functor (struct
   type 'a t = 'a T.t
