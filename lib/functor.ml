@@ -1,16 +1,6 @@
 open La_base
 module Seq = Stdlib.Seq
 
-module type Container = sig
-  type 'a t
-end
-
-module Split (C : Container) : sig
-  type 'a split = Split of 'a C.t Lazy.t * 'a * 'a C.t Lazy.t
-end = struct
-  type 'a split = Split of 'a C.t Lazy.t * 'a * 'a C.t Lazy.t
-end
-
 module type Measurable = sig
   type +'a elt
   type monoid
@@ -142,6 +132,13 @@ module Make (M : Measurable) :
 
     let mk2 (ms : 'a measure) a b = N2 (ms a + ms b, a, b)
     let mk3 (ms : 'a measure) a b c = N3 (ms a + ms b + ms c, a, b, c)
+
+  let get ms p i t =
+    match t with
+    | N2 (_, a, b) -> if p (i + ms a) then a else b
+    | N3 (_, a, b, c) ->
+        let i' = i + ms a in
+        if p i' then a else if p (i' + ms b) then b else c
 
     let fold_right f t acc =
       match t with
@@ -411,29 +408,40 @@ module Make (M : Measurable) :
       | Three (_, _, c) -> c
       | Four (_, _, _, d) -> d
 
-    type 'a split = Split of 'a t option * 'a * 'a t option
+    type 'a split = 'a t option * 'a * 'a t option
 
     let rec split (ms : 'a measure) p i t =
-      match view_l t with
-      | x, None -> Split (None, x, None)
-      | x, Some xs -> (
-          let i' = i + ms x in
-          if p i' then Split (None, x, Some xs)
-          else
-            let (Split (l, x', r)) = split ms p i' xs in
-            match l with
-            | None -> Split (Some (One x), x', r)
-            | Some l -> Split (Some (ladd x l), x', r))
+      match t with
+      | One a -> (None, a, None)
+      | Two (a, b) ->
+        if p (i + ms a) then (None, a, Some (One b)) else (Some (One a), b, None)
+      | Three (a, b, c) ->
+        let i' = (i + ms a) in
+        if p i' then (None, a, Some (Two (b, c)))
+        else if p (i' + ms b) then (Some (One a), b, Some (One c))
+        else (Some (Two (a, b)), c, None)
+      | Four (a, b, c, d) ->
+        let i' = (i + ms a) in
+        if p i' then (None, a, Some (Three (b, c, d)))
+        else
+          let i'' = i' + ms b in
+          if p i'' then (Some (One a), b, Some (Two (c, d)))
+          else if p (i' + ms c) then (Some (Two (a, b)), c, Some (One d))
+          else (Some (Three (a, b, c)), d, None)
 
     let rec get (ms : 'a measure) p i t =
-      match view_l t with
-      | x, None -> x
-      | x, Some xs ->
-          let i' = i + ms x in
-          if p i' then x
-          else
-            let x' = get ms p i' xs in
-            x'
+      match t with
+      | One a -> a
+      | Two (a, b) -> if p (i + ms a) then a else b
+      | Three (a, b, c) ->
+        let i' = ms a in
+        if p i' then a else if p (i' + ms b) then b else c
+      | Four (a, b, c, d) ->
+        let i' = ms a in
+        if p i' then a
+        else
+          let i'' = i' + ms b in
+          if p i'' then b else if p (i'' + ms c) then c else d
 
     let to_seq t () =
       let open Seq in
@@ -462,6 +470,17 @@ module Make (M : Measurable) :
   let empty = Empty
   let lempty = lazy Empty
   let singleton x = Single x
+
+let split_node ms p i t =
+  match t with
+  | Node.N2 (_, a, b) ->
+      if p (i + ms a) then (None, a, Some (Digit.One b))
+      else (Some (Digit.One a), b, None)
+  | N3 (_, a, b, c) ->
+      let i' = i + ms a in
+      if p i' then (None, a, Some (Two (b, c)))
+      else if p (i' + ms b) then (Some (One a), b, Some (One b))
+      else (Some (Two (a, b)), c, None)
 
   let _measure ms = function
     | Empty -> M.null
@@ -695,36 +714,31 @@ module Make (M : Measurable) :
   let join_with t1 el t2 = app3 t1 (One el) t2
   let concat = function [] -> Empty | t :: ts -> List.fold_left join t ts
 
-  include Split (struct
-    type 'a t = 'a t0
-  end)
+  type 'a split = 'a t0 Lazy.t * 'a * 'a t0 Lazy.t
 
   let rec _split :
       'a. 'a measure -> (M.monoid -> bool) -> M.monoid -> 'a t0 -> 'a split =
    fun ms p i -> function
     | Empty -> assert false
-    | Single x -> Split (lempty, x, lempty)
+    | Single x -> (lempty, x, lempty)
     | Deep (_, pr, (lazy mid), sf) ->
         let vpr = i + Digit.measure ms pr in
         let vm = vpr + _measure Node.measure mid in
         if p vpr then
-          let (Split (l, x, r)) = Digit.split ms p i pr in
+          let (l, x, r) = Digit.split ms p i pr in
           let l =
             match l with None -> lempty | Some d -> lazy (of_digit ms d)
-          in
-          Split (l, x, deep_l ms r (lazy mid) sf)
+          in (l, x, deep_l ms r (lazy mid) sf)
         else if p vm then
-          let (Split ((lazy ml), xs, mr)) = _split Node.measure p vpr mid in
-          let (Split (l, x, r)) =
-            Digit.split ms p (vpr + _measure Node.measure ml) (Digit.of_node xs)
+          let (lazy ml), xs, mr = _split Node.measure p vpr mid in
+          let (l, x, r) = split_node ms p (vpr + _measure Node.measure ml) xs
           in
-          Split (deep_r ms pr (lazy ml) l, x, deep_l ms r mr sf)
+          deep_r ms pr (lazy ml) l, x, deep_l ms r mr sf
         else
-          let (Split (l, x, r)) = Digit.split ms p vm sf in
+          let (l, x, r) = Digit.split ms p vm sf in
           let r =
             match r with None -> lempty | Some d -> lazy (of_digit ms d)
-          in
-          Split (deep_r ms pr (lazy mid) l, x, r)
+          in (deep_r ms pr (lazy mid) l, x, r)
 
   let get : 'a. 'a measure -> (M.monoid -> bool) -> M.monoid -> 'a t0 -> 'a =
    fun ms p i -> function
@@ -734,25 +748,19 @@ module Make (M : Measurable) :
         let vpr = i + Digit.measure ms pr in
         let vm = vpr + _measure Node.measure mid in
         if p vpr then
-          let x = Digit.get ms p i pr in
-          x
+          Digit.get ms p i pr
         else if p vm then
-          let (Split ((lazy ml), xs, _)) = _split Node.measure p vpr mid in
-          let x =
-            Digit.get ms p (vpr + _measure Node.measure ml) (Digit.of_node xs)
-          in
-          x
+          let (lazy ml), xs, _ = _split Node.measure p vpr mid in
+          Node.get ms p (vpr + _measure Node.measure ml) xs
         else
-          let x = Digit.get ms p vm sf in
-          x
+          Digit.get ms p vm sf
 
   let get ~p t = get M.measure p M.null t
 
   let partition_lazy ~p = function
     | Empty -> invalid_arg "cannot partition empty tree"
     | xs ->
-        let (Split (l, x, r)) = _split M.measure p M.null xs in
-        (l, x, r)
+        _split M.measure p M.null xs
 
   let partition ~p t =
     let (lazy l), x, (lazy r) = partition_lazy ~p t in
@@ -761,16 +769,16 @@ module Make (M : Measurable) :
   let split ~p = function
     | Empty -> (lempty, lempty)
     | xs ->
-        let (Split (l, x, r)) = _split M.measure p M.null xs in
+        let (l, x, r) = _split M.measure p M.null xs in
         if p (measure xs) then (l, lazy (_ladd M.measure x @@ !!r))
         else (lazy xs, lempty)
 
   let insert ~p x t =
-    let (Split (l, el, r)) = _split M.measure p M.null t in
+    let l, el, r = _split M.measure p M.null t in
     _app3 M.measure !!l (Two (x, el)) !!r
 
   let set ~p x t =
-    let (Split (l, _, r)) = _split M.measure p M.null t in
+    let l, _, r = _split M.measure p M.null t in
     _app3 M.measure !!l (One x) !!r
 
   let pop ~p t =
