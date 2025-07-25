@@ -5,8 +5,6 @@ module type Container = sig
   type 'a t
 end
 
-type 'a thunk = unit -> 'a
-
 module Split (C : Container) : sig
   type 'a split = Split of 'a C.t Lazy.t * 'a * 'a C.t Lazy.t
 end = struct

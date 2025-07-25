@@ -13,7 +13,8 @@
       makes it a great option for highly concatenative operations like
       {!concat_map} and {!Monad} operations.
     - Because of the greater structural complexity, the sequence is not as good
-      of a stack as a basic linked list.
+      of a stack as a basic linked list, and accessing the left end of the
+      sequence has a higher constant time than doing the so with a list.
 
     As always, when performance matters, profile your code and seek an
     alternative if [Fseq] proves to be too slow for your usecase. To me the
@@ -34,10 +35,8 @@
     of the spine to preserve amortized O(1) bounds for accessing the ends of the
     sequence and a sepcialized digit implementation which is faster than the
     default list-based approach (and keeps the implementation from manually
-    maintaining invariants). It does not, however, implement index operations by
-    subtraction as suggested in the paper but instead uses the default additive
-    approach because it is based on a module functor which can be used to
-    implement some of the other data structures in the paper.
+    maintaining invariants), monomorphizing the monoid to [int] and implementing
+    lookups in terms of subtraction.
 
     Laziness is less efficient in OCaml than Haskell, but the finger tree is
     still a good case for it because the number of suspensions has a logrithmic
