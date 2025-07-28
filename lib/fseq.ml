@@ -341,9 +341,6 @@ module T = struct
     | Empty
     | Single of 'a
     | Deep of int Lazy.t * 'a Digit.t * 'a Node.t t Lazy.t * 'a Digit.t
-end
-
-include T
 
 let empty = Empty
 let lempty = lazy Empty
@@ -666,15 +663,15 @@ let to_list t = fold_right ~f:List.cons ~init:[] t
 let of_seq s = Seq.fold_left radd empty s
 let iter ~f t = fold_left ~f:(fun () el -> f el) ~init:() t
 
-let rec map : 'a 'b. ('b -> int) -> f:('a -> 'b) -> 'a t -> 'b t =
+let rec _map : 'a 'b. ('b -> int) -> f:('a -> 'b) -> 'a t -> 'b t =
  fun ms ~f -> function
   | Empty -> Empty
   | Single x -> Single (f x)
   | Deep (_, l, m, r) ->
-      let m' = lazy (map Node.measure ~f:(fun n -> Node.map ms f n) !!m) in
+      let m' = lazy (_map Node.measure ~f:(fun n -> Node.map ms f n) !!m) in
       deep ms (Digit.map f l) m' (Digit.map f r)
 
-let map ~f t = map one ~f t
+let map ~f t = _map one ~f t
 
 let filter ~f t =
   fold_left t ~init:empty ~f:(fun acc el -> if f el then radd acc el else acc)
@@ -874,6 +871,9 @@ let to_array t =
              Array.unsafe_set a i el;
              succ i);
       a
+end
+
+include T
 
 module Monad = Monad.With_functor (struct
   type 'a t = 'a T.t
@@ -882,3 +882,344 @@ module Monad = Monad.With_functor (struct
   let bind t f = concat_map ~f t
   let map = map
 end)
+
+module NonEmpty = struct
+
+  module Ne = struct
+    type +'a t= 
+      | Single of 'a
+      | Deep of int Lazy.t * 'a Digit.t * 'a Node.t T.t Lazy.t * 'a Digit.t
+  end
+  include Ne
+
+  let singleton x = Single x
+
+  let of_t : 'a T.t -> 'a t option = function
+    | Empty -> None
+    | Single a -> Some (Single a)
+    | Deep (v, l, m, r) -> Some (Deep (v, l, m, r))
+
+  let of_t_exn : 'a T.t -> 'a t = function
+    | Empty -> invalid_arg "cannot construct non-empty from empty sequence"
+    | Single a -> Single a
+    | Deep (v, l, m, r) -> Deep (v, l, m, r)
+
+  let to_t : 'a t -> 'a T.t = function
+    | Single a -> Single a
+    | Deep (v, l, m, r) -> Deep (v, l, m, r)
+
+  let _measure ms = function
+    | Single a -> ms a
+    | Deep ((lazy v), _, _, _) -> v
+
+  let length t = _measure one t
+
+  let pp :
+    'a. (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit =
+    fun pp_el out t ->
+    let open Format in
+    match t with
+    | Single a -> fprintf out "{@[%a@]}" pp_el a
+    | Deep (_, l, (lazy m), r) ->
+      fprintf out "{@[%a,@ %a,@ %a@]}" (Digit.pp pp_el) l
+        (T.pp (Node.pp pp_el))
+        m (Digit.pp pp_el) r
+
+  let show pp_el t = Format.asprintf "%a" (pp pp_el) t
+
+  let deep pr mid sf =
+    Deep
+      ( lazy
+        (Digit.measure one pr + T._measure Node.measure !!mid + Digit.measure one sf),
+        pr,
+        mid,
+        sf )
+
+  let fold_right ~f t ~init =
+    match t with
+    | Single x -> f x init
+    | Deep (_, pr, (lazy mid), sf) ->
+      let f' = Digit.fold_right f and f'' = T.fold_right ~f:(Node.fold_right f) in
+      f' pr (f'' mid ~init:(f' sf init))
+
+  let fold_left ~f ~init t =
+    match t with
+    | Single x -> f init x
+    | Deep (_, pr, (lazy mid), sf) ->
+      let f' = Digit.fold_left f and f'' = T.fold_left ~f:(Node.fold_left f) in
+      f' (f'' ~init:(f' init pr) mid) sf
+
+  let fold = fold_left
+
+  let ladd a t =
+    match t with
+    | Single b -> deep (One a) lempty (One b)
+    | Deep (_, Four (b, c, d, e), mid, sf) ->
+      deep
+        (Two (a, b))
+        (lazy (T._ladd Node.measure (Node.mk3 one c d e) !!mid))
+        sf
+    | Deep (_, pr, mid, sf) -> deep (Digit.ladd a pr) mid sf
+
+  let ( @< ) = ladd
+
+  let _ladd_digit d t =
+    match (d, t) with
+    | Digit.One a, Single b -> deep (One a) lempty (One b)
+    | Two (a, b), Single c -> deep (Two (a, b)) lempty (One c)
+    | Three (a, b, c), Single d -> deep (Two (a, b)) lempty (Two (c, d))
+    | Four (a, b, c, d), Single e -> deep (Three (a, b, c)) lempty (Two (d, e))
+    | digit, Deep (_, pr, mid, sf) -> (
+        match Digit.joinl one digit pr with
+        | pr', None -> deep pr' mid sf
+        | pr', Some nodes ->
+          deep pr' (lazy (T._ladd_digit Node.measure nodes !!mid)) sf)
+
+  let radd t z =
+    match t with
+    | Single y -> deep (One y) lempty (One z)
+    | Deep (_, pr, mid, Four (v, w, x, y)) ->
+      deep pr
+        (lazy (T._radd Node.measure !!mid (Node.mk3 one v w x)))
+        (Two (y, z))
+    | Deep (_, pr, mid, sf) -> deep pr mid (Digit.radd sf z)
+
+  let ( >@ ) = radd
+
+  let _radd_digit t d =
+    match (t, d) with
+    | Single a, Digit.One b -> deep (One a) lempty (One b)
+    | Single a, Two (b, c) -> deep (Two (a, b)) lempty (One c)
+    | Single a, Three (b, c, d) -> deep (Two (a, b)) lempty (Two (c, d))
+    | Single a, Four (b, c, d, e) -> deep (Three (a, b, c)) lempty (Two (d, e))
+    | Deep (_, pr, mid, sf), digit -> (
+        match Digit.joinr one sf digit with
+        | None, sf' -> deep pr mid sf'
+        | Some nodes, sf' ->
+          deep pr (lazy (T._radd_digit Node.measure !!mid nodes)) sf')
+
+  let of_digit = function
+    | Digit.One a -> Single a
+    | Two (a, b) -> Deep (lazy 2, One a, lempty, One b)
+    | Three (a, b, c) ->
+      Deep (lazy 3, Two (a, b), lempty, One c)
+    | Four (a, b, c, d) ->
+      Deep (lazy 4, Two (a, b), lempty, Two (c, d))
+
+  let rec lview_lazy t =
+    match t with
+    | Single x -> x, None
+    | Deep (_, pr, mid, sf) ->
+      let hd, tl = Digit.view_l pr in
+      hd, Some (deep_l tl mid sf)
+
+  and deep_l pr mid sf =
+    lazy
+      (match pr with
+       | None -> (
+           match T.view_l Node.measure !!mid with
+           | None -> of_digit sf
+           | Some (a, mid) -> deep (Digit.of_node a) mid sf)
+       | Some pr -> deep pr mid sf)
+
+  let lview t =
+    match lview_lazy t with
+    | h, Some (lazy t) -> h, Some t
+    | h, None -> h, None
+
+  let hd_left = function
+    | Single x -> x
+    | Deep (_, pr, _, _) -> Digit.hd pr
+
+  let tl_left_exn t =
+    match lview t with
+    | _, None ->
+      invalid_arg "can't derive non-empty tail of single-element sequence"
+    | _, Some t -> t
+
+  let rec rview_lazy t =
+    match t with
+    | Single x -> (None, x)
+    | Deep (_, pr, mid, sf) ->
+      let hd, tl = Digit.view_r sf in
+      (Some (deep_r pr mid tl), hd)
+  and deep_r pr mid sf =
+    lazy
+      (match sf with
+       | None -> (
+           match T.view_r Node.measure !!mid with
+           | None -> of_digit pr
+           | Some (mid', a) -> deep pr mid' (Digit.of_node a))
+       | Some sf -> deep pr mid sf)
+
+  let rview t =
+    match rview_lazy t with
+    | None, h -> None, h
+    | Some (lazy t), h ->
+      (Some t, h)
+
+  let hd_right = function
+    | Single x -> x
+    | Deep (_, _, _, sf) -> Digit.hd_r sf
+
+  let tl_right_exn t =
+    match rview t with
+    | None, _ -> invalid_arg "can't derive non-empty tail of single-element sequence"
+    | Some t, _ -> t
+
+
+  let app3 t1 d t2 =
+    match (t1, t2) with
+    | Single x, xs -> ladd x (_ladd_digit d xs)
+    | xs, Single x -> radd (_radd_digit xs d) x
+    | Deep (_, pr1, m1, sf1), Deep (_, pr2, m2, sf2) ->
+      deep pr1
+        (lazy (T._app3 Node.measure !!m1 (Digit.join3 one sf1 d pr2) !!m2))
+        sf2
+
+  let join t1 t2 =
+    match (t1, t2) with
+    | Single x, xs -> ladd x xs
+    | xs, Single x -> radd xs x
+    | Deep (_, pr1, m1, sf1), Deep (_, pr2, m2, sf2) ->
+      deep pr1
+        (lazy (_app3 Node.measure !!m1 (Digit.join2 one sf1 pr2) !!m2))
+        sf2
+
+  let ( >< ) = join
+  let join_with t1 el t2 = app3 t1 (One el) t2
+
+  let get_unchecked : 'a. int -> 'a t -> 'a =
+    fun i -> function
+      | Single x -> x
+      | Deep (_, pr, (lazy mid), sf) ->
+        let vpr = Digit.measure one pr in
+        if i < vpr then
+          let x = Digit.get one i pr in
+          x
+        else
+          let vm = T._measure Node.measure mid in
+          let i' = i - vpr in
+          if i' < vm then
+            let (lazy ml), xs, _ = _split Node.measure i' mid in
+            Node.get one (i' - T._measure Node.measure ml) xs
+          else Digit.get one i' sf
+
+  let get ~default i t =
+    if i < 0 || i >= length t then
+      default
+    else get_unchecked i t
+
+  let insert_unchecked i x t =
+    of_t_exn @@ insert_unchecked i x @@ to_t t
+
+  let insert i x t =
+    match insert i x @@ to_t t with
+    | None -> None
+    | Some t' -> of_t t'
+
+  let set_unchecked i x t =
+    of_t_exn @@ set_unchecked i x @@ to_t t
+
+  let set i x t =
+    match set i x @@ to_t t with
+    | None -> None
+    | Some t2 -> of_t t2
+
+  let rotate n t =
+    of_t_exn @@ rotate n @@ to_t t
+
+  let msort ~cmp t =
+    of_t_exn @@ msort ~cmp @@ to_t t
+
+  let sort ~cmp t =
+    of_t_exn @@ sort ~cmp @@ to_t t
+
+  let of_list = function
+    | [] -> None
+    | h :: t -> Some (List.fold_left radd (singleton h) t)
+
+  let to_list t = fold_right ~f:List.cons ~init:[] t
+
+  let of_seq s =
+    let open Seq in
+    match s () with
+    | Nil -> None
+    | Cons (h, t) -> Some (Seq.fold_left radd (singleton h) t)
+
+
+  let iter ~f t = fold_left ~f:(fun () el -> f el) ~init:() t
+
+  let map ~f = function
+      | Single x -> Single (f x)
+      | Deep (_, l, m, r) ->
+        let m' = lazy (T._map Node.measure ~f:(fun n -> Node.map one f n) !!m) in
+        deep (Digit.map f l) m' (Digit.map f r)
+
+  let concat_map ~f t =
+    match lview t with
+    | h, None -> f h
+    | h, Some t ->
+      fold_left t ~init:(f h) ~f:(fun acc el -> acc >< f el)
+
+  let to_seq : 'a. 'a t -> 'a Seq.t =
+    fun t () ->
+    let open Seq in
+    match t with
+    | Single a -> Cons (a, empty)
+    | Deep (_, l, (lazy m), r) ->
+      let end' = Digit.to_seq r
+      and mid' = concat_map Node.to_seq (T.to_seq m)
+      and start' = Digit.to_seq l in
+      (append start' @@ append mid' end') ()
+
+  let rev_to_seq : 'a. 'a t -> 'a Seq.t =
+    fun t () ->
+    let open Seq in
+    match t with
+    | Single a -> Cons (a, empty)
+    | Deep (_, l, (lazy m), r) ->
+      let end' = Digit.rev_to_seq r
+      and mid' = concat_map Node.rev_to_seq (T.rev_to_seq m)
+      and start' = Digit.rev_to_seq l in
+      (append end' @@ append mid' start') ()
+
+  let unfold ~f ~init =
+    match f init with
+    | None -> None
+    | Some (el, state) ->
+      let rec loop acc state =
+        match f state with
+        | None -> acc
+        | Some (el, state') -> loop (acc >@ el) state'
+      in
+      Some (loop (singleton el) state)
+
+  let init ~len ~f =
+    let rec loop i t = if i >= len then t else loop (i + 1) (t >@ f i) in
+    loop 1 (singleton (f 0))
+
+  let to_array t =
+    let len = length t in
+    let v = hd_left t in
+    let a = Array.make len v in
+    ignore
+    @@ fold_left ~init:0 t ~f:(fun i el ->
+        Array.unsafe_set a i el;
+        succ i);
+    a
+
+  module Operators = struct
+    let ( @< ) = ( @< )
+    let ( >@ ) = ( >@ )
+    let ( >< ) = ( >< )
+  end
+
+  module Monad = La_base.Monad.With_functor (struct
+      type 'a t = 'a Ne.t
+      let return = singleton
+      let bind t f = concat_map ~f t
+      let map = map
+    end)
+
+end

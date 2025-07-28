@@ -564,3 +564,209 @@ module Monad : sig
   val ( let+ ) : 'a t -> ('a -> 'b) -> 'b t
   val ( and+ ) : 'a t -> 'b t -> ('a * 'b) t
 end
+
+module NonEmpty : sig
+  type 'a t
+
+  val length : 'a t -> int
+  (** {!Fseq.t} keeps track of length, so this operation is O(1) *)
+
+  (** {3 Construction operations} *)
+
+  val singleton : 'a -> 'a t
+  (** Take a value as input and return a one-element sequence containing that
+      value *)
+
+  val ladd : 'a -> 'a t -> 'a t
+  (** Add an element to the left side of a sequence. Like [cons] with a list. *)
+
+  val ( @< ) : 'a -> 'a t -> 'a t
+  (** operator version of {!ladd}. Right associative. *)
+
+  val radd : 'a t -> 'a -> 'a t
+  (** Add an element to the right side of a sequence. Like [snoc] in that "other"
+      functional language. Performance is O(1). *)
+
+  val ( >@ ) : 'a t -> 'a -> 'a t
+  (** operator version of {!radd}. Left associative. *)
+
+  val init : len:int -> f:(int -> 'a) -> 'a t
+  (** Initialize a new sequence of length [len] with the result of [f] for each
+      index. *)
+
+  val unfold : f:('a -> ('b * 'a) option) -> init:'a -> 'b t option
+  (** Unfold a sequence from an initial state. The initial state is passed to [f].
+      [f] produces either [None], in which case the the sequence is finished, or
+      [Some] of a pair of an element and the next state to passed to [f]. *)
+
+  val join : 'a t -> 'a t -> 'a t
+  (** join two sequences. Probably should be called "append". *)
+
+  val ( >< ) : 'a t -> 'a t -> 'a t
+  (** Operator version of join. Left associative. *)
+
+  val join_with : 'a t -> 'a -> 'a t -> 'a t
+  (** Join two sequences with an element in the middle. *)
+
+  val insert : int -> 'a -> 'a t -> 'a t option
+  (** Insert an element at the given index. *)
+
+  (** {3 Restructuring operations} *)
+
+  val set : int -> 'a -> 'a t -> 'a t option
+  (** Change the element at the given index. *)
+
+  val msort : cmp:('a -> 'a -> int) -> 'a t -> 'a t
+  (** Merge sort with stable sort time. *)
+
+  val sort : cmp:('a -> 'a -> int) -> 'a t -> 'a t
+  (** Sorting algorithm loosely based on quicksort, but it's not in-place. Don't
+      expect miracles. Generally faster than merge sort, but worse in the worst
+      case. *)
+
+  val rotate : int -> 'a t -> 'a t
+  (** Deque rotation (not matrix rotation). A positive integer rotates towards the
+      left. A negative integer rotates towards the right. Over-rotation is
+      permitted. *)
+
+  (** {3 Destructuring operations} *)
+
+  val lview : 'a t -> 'a * 'a t option
+  (** "Uncons" on the left side of the sequence. Returns [None] on an empty
+      seqnece and [Some] of a pair of an element and the remaining sequence. *)
+
+  val lview_lazy : 'a t -> 'a * 'a t Lazy.t option
+  (** Same as {!lview}, but lazy in the tail *)
+
+  val rview : 'a t -> 'a t option * 'a
+  (** Uncons from the right side of the sequence (or "unsnoc", if you like).
+      Returns [None] on an empty sequence and [Some] of a pair of an element and
+      the remaining sequence. *)
+
+  val rview_lazy : 'a t -> 'a t Lazy.t option * 'a
+  (** Same as {!rview}, but lazy in the tail *)
+
+  val hd_left : 'a t -> 'a
+  val hd_right : 'a t -> 'a
+
+  val get : default:'a -> int -> 'a t -> 'a
+  (** Retrieve the element at the given index. Returns [None] if the index is out
+      of bounds and [Some] of the element otherwise. *)
+
+  (** {3 Iterative operations}
+
+      I won't take much time to explain these, since I assume most OCaml
+      programmers are familiar with them. If not, check out standard library
+      documentation for [List] or [Array] or [Seq] which all have all of these.
+
+      There are not many of these functions because we have [Seq] in the standard
+      library, and you can simply wrap {!Fseq.t} with {!to_seq} to use a huge
+      number of them. *)
+
+  val fold_right : f:('a -> 'b -> 'b) -> 'a t -> init:'b -> 'b
+  (** Note that, while right fold is somewhat inadvisable with regular OCaml lists
+      because it is not tail recursive, [Fseq.fold_right] doesn't have this
+      problem. That is, it's not tail recursive (nor are any of these iteration
+      functions), but it's tree traversal so the stack depth is much smaller. You
+      would likely exhaust your RAM before the stack limit is reached. *)
+
+  val fold_left : f:('b -> 'a -> 'b) -> init:'b -> 'a t -> 'b
+
+  val fold : f:('b -> 'a -> 'b) -> init:'b -> 'a t -> 'b
+  (** An alias for fold_left because I am lazy about typing. *)
+
+  val iter : f:('a -> unit) -> 'a t -> unit
+
+  val map : f:('a -> 'b) -> 'a t -> 'b t
+  (** Note well that {b [map] does not operated over elements in order}. The
+      output is in order, but mapping over the spine is suspended. If you have
+      side effects in [f], they {i will} happen out of order, starting at the ends
+      of the sequence and working inward.
+
+      The reason for this is that spine of the finger tree is always lazy. It
+      would be simple to write [map] in a way that all applications of [f] occur
+      in the order of elements in the sequence, but I found it cool to allow this
+      computation to be suspended. If there is "public outcry" about this
+      behavior, I'll change it. *)
+
+  val concat_map : f:('a -> 'b t) -> 'a t -> 'b t
+
+  val of_list : 'a list -> 'a t option
+  (** {3 Converstion operations} *)
+
+  val to_list : 'a t -> 'a list
+  val of_seq : 'a Seq.t -> 'a t option
+  val to_seq : 'a t -> 'a Seq.t
+
+  val rev_to_seq : 'a t -> 'a Seq.t
+  (** Creates an instance of [Seq.t] which iterates over sequence elements from
+      right to left *)
+
+  val to_array : 'a t -> 'a array
+  (** I included {!to_array} because because the implementation is not a
+      one-liner, and a sequence is a nice for coversion to an array because
+      getting the length is O(1).
+
+      There is no [of_array]. It's a one-liner if you need it:
+
+      {@ocaml[
+        let of_array a = Array.fold_left Fseq.radd Fseq.empty a
+      ]}
+
+      Conversion from most other types is as simple as this. *)
+
+  (** {3 Pretty printing} *)
+
+  val pp : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
+  [@@ocaml.toplevel_printer]
+  (** Displays {!Fseq.t} as a flat sequence. For use with the print functions in
+      the [Format] library. *)
+
+  val show : (Format.formatter -> 'a -> unit) -> 'a t -> string
+  (** Same as {!pp} but returns a string instead of printing *)
+
+  (** {3 Operations which throw exceptions for out-of-bounds lookups} *)
+
+  val tl_left_exn : 'a t -> 'a t
+  (** Remomve the left-most element and return the rest of the
+      sequence. Raises an exception with a single-element sequence. *)
+
+  val tl_right_exn : 'a t -> 'a t
+  (** Remomve the right-most element and return the rest of the
+      sequence. Raises an exception with a single-element sequence. *)
+
+  (** {3 Operations which don't do bounds checks} *)
+
+  val set_unchecked : int -> 'a -> 'a t -> 'a t
+  val insert_unchecked : int -> 'a -> 'a t -> 'a t
+  val get_unchecked : int -> 'a t -> 'a
+
+  (** {3 Modules} *)
+
+  (** A module with only the operators so you can open it without poluting your
+      namespace *)
+  module Operators : sig
+    val ( @< ) : 'a -> 'a t -> 'a t
+    val ( >@ ) : 'a t -> 'a -> 'a t
+    val ( >< ) : 'a t -> 'a t -> 'a t
+  end
+
+  (** A module with monad and applicative operations based on concat_map. It is
+      computationally equivalent to list comprehensions in other languages. *)
+  module Monad : sig
+    val bind : 'a t -> ('a -> 'b t) -> 'b t
+    val return : 'a -> 'a t
+    val ( let* ) : 'a t -> ('a -> 'b t) -> 'b t
+    val ( and* ) : 'a t -> 'b t -> ('a * 'b) t
+    val map : f:('a -> 'b) -> 'a t -> 'b t
+    val liftA2 : f:('a -> 'b -> 'c) -> 'a t -> 'b t -> 'c t
+    val liftA3 : f:('a -> 'b -> 'c -> 'd) -> 'a t -> 'b t -> 'c t -> 'd t
+    val apply : ('a -> 'b) t -> 'a t -> 'b t
+    val ( <$> ) : ('a -> 'b) -> 'a t -> 'b t
+    val ( <*> ) : ('a -> 'b) t -> 'a t -> 'b t
+    val ( *> ) : unit t -> 'a t -> 'a t
+    val ( <* ) : 'a t -> unit t -> 'a t
+    val ( let+ ) : 'a t -> ('a -> 'b) -> 'b t
+    val ( and+ ) : 'a t -> 'b t -> ('a * 'b) t
+  end
+end
