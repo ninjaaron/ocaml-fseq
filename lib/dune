@@ -1,6 +1,5 @@
 (library
- (public_name la_fingertree)
- (name la_fingertree)
- (libraries la_base)
+ (public_name fseq)
+ (name fseq)
  (preprocess
   (pps ppx_deriving.std)))

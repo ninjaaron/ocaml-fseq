@@ -1,5 +1,6 @@
-open La_base
 module Seq = Stdlib.Seq
+
+let ( !! ) = Lazy.force
 
 module type Measurable = sig
   type +'a elt
@@ -133,12 +134,12 @@ module Make (M : Measurable) :
     let mk2 (ms : 'a measure) a b = N2 (ms a + ms b, a, b)
     let mk3 (ms : 'a measure) a b c = N3 (ms a + ms b + ms c, a, b, c)
 
-  let get ms p i t =
-    match t with
-    | N2 (_, a, b) -> if p (i + ms a) then a else b
-    | N3 (_, a, b, c) ->
-        let i' = i + ms a in
-        if p i' then a else if p (i' + ms b) then b else c
+    let get ms p i t =
+      match t with
+      | N2 (_, a, b) -> if p (i + ms a) then a else b
+      | N3 (_, a, b, c) ->
+          let i' = i + ms a in
+          if p i' then a else if p (i' + ms b) then b else c
 
     let fold_right f t acc =
       match t with
@@ -412,34 +413,35 @@ module Make (M : Measurable) :
       match t with
       | One a -> (None, a, None)
       | Two (a, b) ->
-        if p (i + ms a) then (None, a, Some (One b)) else (Some (One a), b, None)
+          if p (i + ms a) then (None, a, Some (One b))
+          else (Some (One a), b, None)
       | Three (a, b, c) ->
-        let i' = (i + ms a) in
-        if p i' then (None, a, Some (Two (b, c)))
-        else if p (i' + ms b) then (Some (One a), b, Some (One c))
-        else (Some (Two (a, b)), c, None)
+          let i' = i + ms a in
+          if p i' then (None, a, Some (Two (b, c)))
+          else if p (i' + ms b) then (Some (One a), b, Some (One c))
+          else (Some (Two (a, b)), c, None)
       | Four (a, b, c, d) ->
-        let i' = (i + ms a) in
-        if p i' then (None, a, Some (Three (b, c, d)))
-        else
-          let i'' = i' + ms b in
-          if p i'' then (Some (One a), b, Some (Two (c, d)))
-          else if p (i' + ms c) then (Some (Two (a, b)), c, Some (One d))
-          else (Some (Three (a, b, c)), d, None)
+          let i' = i + ms a in
+          if p i' then (None, a, Some (Three (b, c, d)))
+          else
+            let i'' = i' + ms b in
+            if p i'' then (Some (One a), b, Some (Two (c, d)))
+            else if p (i' + ms c) then (Some (Two (a, b)), c, Some (One d))
+            else (Some (Three (a, b, c)), d, None)
 
     let get (ms : 'a measure) p i t =
       match t with
       | One a -> a
       | Two (a, b) -> if p (i + ms a) then a else b
       | Three (a, b, c) ->
-        let i' = ms a in
-        if p i' then a else if p (i' + ms b) then b else c
+          let i' = ms a in
+          if p i' then a else if p (i' + ms b) then b else c
       | Four (a, b, c, d) ->
-        let i' = ms a in
-        if p i' then a
-        else
-          let i'' = i' + ms b in
-          if p i'' then b else if p (i'' + ms c) then c else d
+          let i' = ms a in
+          if p i' then a
+          else
+            let i'' = i' + ms b in
+            if p i'' then b else if p (i'' + ms c) then c else d
 
     let to_seq t () =
       let open Seq in
@@ -469,16 +471,16 @@ module Make (M : Measurable) :
   let lempty = lazy Empty
   let singleton x = Single x
 
-let split_node ms p i t =
-  match t with
-  | Node.N2 (_, a, b) ->
-      if p (i + ms a) then (None, a, Some (Digit.One b))
-      else (Some (Digit.One a), b, None)
-  | N3 (_, a, b, c) ->
-      let i' = i + ms a in
-      if p i' then (None, a, Some (Two (b, c)))
-      else if p (i' + ms b) then (Some (One a), b, Some (One b))
-      else (Some (Two (a, b)), c, None)
+  let split_node ms p i t =
+    match t with
+    | Node.N2 (_, a, b) ->
+        if p (i + ms a) then (None, a, Some (Digit.One b))
+        else (Some (Digit.One a), b, None)
+    | N3 (_, a, b, c) ->
+        let i' = i + ms a in
+        if p i' then (None, a, Some (Two (b, c)))
+        else if p (i' + ms b) then (Some (One a), b, Some (One b))
+        else (Some (Two (a, b)), c, None)
 
   let _measure ms = function
     | Empty -> M.null
@@ -630,11 +632,7 @@ let split_node ms p i t =
       | Some pr -> deep ms pr mid sf)
 
   let lview_lazy t = view_l M.measure t
-
-  let lview t =
-    let+? h, (lazy t) = lview_lazy t in
-    (h, t)
-
+  let lview t = Option.map (fun (h, (lazy t)) -> (h, t)) (lview_lazy t)
   let is_empty t = match lview_lazy t with None -> true | Some _ -> false
 
   let hd_left_exn = function
@@ -670,10 +668,7 @@ let split_node ms p i t =
       | Some sf -> deep ms pr mid sf)
 
   let rview_lazy t = view_r M.measure t
-
-  let rview t =
-    let+? (lazy t), h = rview_lazy t in
-    (t, h)
+  let rview t = Option.map (fun ((lazy t), h) -> (t, h)) (rview_lazy t)
 
   let hd_right_exn = function
     | Empty -> invalid_arg "can't find head of empty finger tree"
@@ -723,20 +718,21 @@ let split_node ms p i t =
         let vpr = i + Digit.measure ms pr in
         let vm = vpr + _measure Node.measure mid in
         if p vpr then
-          let (l, x, r) = Digit.split ms p i pr in
+          let l, x, r = Digit.split ms p i pr in
           let l =
             match l with None -> lempty | Some d -> lazy (of_digit ms d)
-          in (l, x, deep_l ms r (lazy mid) sf)
+          in
+          (l, x, deep_l ms r (lazy mid) sf)
         else if p vm then
           let (lazy ml), xs, mr = _split Node.measure p vpr mid in
-          let (l, x, r) = split_node ms p (vpr + _measure Node.measure ml) xs
-          in
-          deep_r ms pr (lazy ml) l, x, deep_l ms r mr sf
+          let l, x, r = split_node ms p (vpr + _measure Node.measure ml) xs in
+          (deep_r ms pr (lazy ml) l, x, deep_l ms r mr sf)
         else
-          let (l, x, r) = Digit.split ms p vm sf in
+          let l, x, r = Digit.split ms p vm sf in
           let r =
             match r with None -> lempty | Some d -> lazy (of_digit ms d)
-          in (deep_r ms pr (lazy mid) l, x, r)
+          in
+          (deep_r ms pr (lazy mid) l, x, r)
 
   let get : 'a. 'a measure -> (M.monoid -> bool) -> M.monoid -> 'a t0 -> 'a =
    fun ms p i -> function
@@ -745,20 +741,17 @@ let split_node ms p i t =
     | Deep (_, pr, (lazy mid), sf) ->
         let vpr = i + Digit.measure ms pr in
         let vm = vpr + _measure Node.measure mid in
-        if p vpr then
-          Digit.get ms p i pr
+        if p vpr then Digit.get ms p i pr
         else if p vm then
           let (lazy ml), xs, _ = _split Node.measure p vpr mid in
           Node.get ms p (vpr + _measure Node.measure ml) xs
-        else
-          Digit.get ms p vm sf
+        else Digit.get ms p vm sf
 
   let get ~p t = get M.measure p M.null t
 
   let partition_lazy ~p = function
     | Empty -> invalid_arg "cannot partition empty tree"
-    | xs ->
-        _split M.measure p M.null xs
+    | xs -> _split M.measure p M.null xs
 
   let partition ~p t =
     let (lazy l), x, (lazy r) = partition_lazy ~p t in
@@ -767,7 +760,7 @@ let split_node ms p i t =
   let split ~p = function
     | Empty -> (lempty, lempty)
     | xs ->
-        let (l, x, r) = _split M.measure p M.null xs in
+        let l, x, r = _split M.measure p M.null xs in
         if p (measure xs) then (l, lazy (_ladd M.measure x @@ !!r))
         else (lazy xs, lempty)
 
