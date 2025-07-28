@@ -408,9 +408,7 @@ module Make (M : Measurable) :
       | Three (_, _, c) -> c
       | Four (_, _, _, d) -> d
 
-    type 'a split = 'a t option * 'a * 'a t option
-
-    let rec split (ms : 'a measure) p i t =
+    let split (ms : 'a measure) p i t =
       match t with
       | One a -> (None, a, None)
       | Two (a, b) ->
@@ -429,7 +427,7 @@ module Make (M : Measurable) :
           else if p (i' + ms c) then (Some (Two (a, b)), c, Some (One d))
           else (Some (Three (a, b, c)), d, None)
 
-    let rec get (ms : 'a measure) p i t =
+    let get (ms : 'a measure) p i t =
       match t with
       | One a -> a
       | Two (a, b) -> if p (i + ms a) then a else b
