@@ -2,14 +2,14 @@ module Seq = Stdlib.Seq
 
 let ( !! ) = Lazy.force
 
-(** Module type for functor input. It mostly defines a monoid, but also
-    the element type *)
+(** Module type for functor input. It mostly defines a monoid, but also the
+    element type *)
 module type Measurable = sig
   type +'a elt
-  (** element type of the finger tree. The reason it is not left
-      entirely generic is because sometimes the monoid is stored with
-      the data, so [elt] represents any specifically typed data which
-      may be stored alongside the generic contents. *)
+  (** element type of the finger tree. The reason it is not left entirely
+      generic is because sometimes the monoid is stored with the data, so [elt]
+      represents any specifically typed data which may be stored alongside the
+      generic contents. *)
 
   type monoid
   (** Type of the monoid *)
@@ -19,9 +19,10 @@ module type Measurable = sig
 
   val measure : 'a elt -> monoid
   (** convert an element to an instance of the monoid *)
-  val add : monoid -> monoid -> monoid
-end
 
+  val add : monoid -> monoid -> monoid
+  (** An associative operation for joining monoid instances. *)
+end
 
 module type S = sig
   type monoid
@@ -31,13 +32,17 @@ module type S = sig
   (** A function type for measuring elements with a monoid. *)
 
   module Node : sig
-    type 'a t = N2 of monoid * 'a * 'a | N3 of monoid * 'a * 'a * 'a
-    (** Internal node in the finger tree. Contains either 2 or 3 elements. *)
+    type 'a t =
+      | N2 of monoid * 'a * 'a
+      | N3 of monoid * 'a * 'a * 'a
+          (** Internal node in the finger tree. Contains either 2 or 3 elements.
+          *)
 
     val measure : 'a t -> monoid
     (** Returns the cached measure of a node. *)
 
-    val pp : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
+    val pp :
+      (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
     (** Pretty-printer for a node. *)
 
     val show : (Format.formatter -> 'a -> unit) -> 'a t -> string
@@ -56,9 +61,10 @@ module type S = sig
       | Two of 'a * 'a
       | Three of 'a * 'a * 'a
       | Four of 'a * 'a * 'a * 'a
-    (** A digit is a prefix or suffix of up to four elements. *)
+          (** A digit is a prefix or suffix of up to four elements. *)
 
-    val pp : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
+    val pp :
+      (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
     (** Pretty-printer for a digit. *)
 
     val show : (Format.formatter -> 'a -> unit) -> 'a t -> string
@@ -72,7 +78,7 @@ module type S = sig
     | Empty
     | Single of 'a
     | Deep of monoid Lazy.t * 'a Digit.t * 'a Node.t t0 Lazy.t * 'a Digit.t
-  (** The underlying tree structure. *)
+        (** The underlying tree structure. *)
 
   type +'a elt
   (** The element type stored in the tree. *)
@@ -80,7 +86,8 @@ module type S = sig
   type +'a t = 'a elt t0
   (** Just a mask type to avoid writing ['a elt t] everywhere. *)
 
-  val pp : (Format.formatter -> 'a elt -> unit) -> Format.formatter -> 'a t -> unit
+  val pp :
+    (Format.formatter -> 'a elt -> unit) -> Format.formatter -> 'a t -> unit
   [@@ocaml.toplevel_printer]
   (** Pretty-printer for a finger tree. *)
 
@@ -97,12 +104,11 @@ module type S = sig
   (** Returns the monoidal measure of the entire tree. *)
 
   val fold_right : f:('a elt -> 'b -> 'b) -> 'a t -> init:'b -> 'b
-  (** Right fold over the tree. Unlike OCaml's strict lists, right
-      folding and left folding are equally efficient. Niether are tail
-      recurseive, but as they are implemented in terms of tree
-      traversal, the stack depth is not likely to become too
-      large. One would likely exhaust all available RAM to store
-      elements many times over before the frame limit is reached. *)
+  (** Right fold over the tree. Unlike OCaml's strict lists, right folding and
+      left folding are equally efficient. Niether are tail recurseive, but as
+      they are implemented in terms of tree traversal, the stack depth is not
+      likely to become too large. One would likely exhaust all available RAM to
+      store elements many times over before the frame limit is reached. *)
 
   val fold_left : f:('b -> 'a elt -> 'b) -> init:'b -> 'a t -> 'b
   (** Left fold over the tree. *)
@@ -114,13 +120,15 @@ module type S = sig
   (** Maps a function over the tree elements. *)
 
   val filter : f:('a elt -> bool) -> 'a t -> 'a t
-  (** Filters the tree by removing elements that do not satisfy the predicate. *)
+  (** Filters the tree by removing elements that do not satisfy the predicate.
+  *)
 
   val filter_map : f:('a elt -> 'b elt option) -> 'a t -> 'b t
   (** Filters and maps the elements simultaneously. *)
 
   val concat_map : f:('a elt -> 'b t) -> 'a t -> 'b t
-  (** Applies a function to each element and concatenates the resulting trees. *)
+  (** Applies a function to each element and concatenates the resulting trees.
+  *)
 
   val iter : f:('a elt -> unit) -> 'a t -> unit
   (** Iterates over each element in the tree to produce a side effect. *)
@@ -129,8 +137,8 @@ module type S = sig
   (** Prepends an element to the tree. Equivalent to [cons] for a list. *)
 
   val radd : 'a t -> 'a elt -> 'a t
-  (** Appends an element to the tree. Equivalent to [snoc] (in some
-      languages) for a list. *)
+  (** Appends an element to the tree. Equivalent to [snoc] (in some languages)
+      for a list. *)
 
   val ( @< ) : 'a elt -> 'a t -> 'a t
   (** Infix alias for [ladd]. Right associative. *)
@@ -139,12 +147,12 @@ module type S = sig
   (** Infix alias for [radd]. Left associative. *)
 
   val lview : 'a t -> ('a elt * 'a t) option
-  (** Returns the left-most element and the rest of the tree, or
-      [None] if empty. More or less an [uncons] operation. *)
+  (** Returns the left-most element and the rest of the tree, or [None] if
+      empty. More or less an [uncons] operation. *)
 
   val rview : 'a t -> ('a t * 'a elt) option
-  (** Returns the right-most element and the rest of the tree, or
-      [None] if empty. More or less an [unsnoc] operation. *)
+  (** Returns the right-most element and the rest of the tree, or [None] if
+      empty. More or less an [unsnoc] operation. *)
 
   val lview_lazy : 'a t -> ('a elt * 'a t Lazy.t) option
   (** Lazy variant of [lview]. *)
@@ -159,15 +167,15 @@ module type S = sig
   (** Returns the left-most element, or raises if the tree is empty. *)
 
   val tl_left : 'a t -> 'a t
-  (** Removes the left-most element from the tree. Empty input
-      produces empty output. *)
+  (** Removes the left-most element from the tree. Empty input produces empty
+      output. *)
 
   val hd_right_exn : 'a t -> 'a elt
   (** Returns the right-most element, or raises if the tree is empty. *)
 
   val tl_right : 'a t -> 'a t
-  (** Removes the right-most element from the tree. Empty input
-      produces empty output. *)
+  (** Removes the right-most element from the tree. Empty input produces empty
+      output. *)
 
   val join : 'a t -> 'a t -> 'a t
   (** Concatenates two trees. O(log(N)) time. *)
@@ -182,29 +190,29 @@ module type S = sig
   (** Concatenates a list of trees. *)
 
   val partition : p:(monoid -> bool) -> 'a t -> 'a t * 'a elt * 'a t
-  (** Partitions the tree around the first element whose measure
-      satisfies [p]. *)
+  (** Partitions the tree around the first element whose measure satisfies [p].
+  *)
 
   val partition_lazy :
     p:(monoid -> bool) -> 'a t -> 'a t Lazy.t * 'a elt * 'a t Lazy.t
-  (** Same as {!partition}, but The resulting left and right trees are
-      suspended in [Lazy.t] *)
+  (** Same as {!partition}, but The resulting left and right trees are suspended
+      in [Lazy.t] *)
 
   val split : p:(monoid -> bool) -> 'a t -> 'a t Lazy.t * 'a t Lazy.t
-  (** Splits the tree around the first measure satisfying [p],
-      returning the parts before and after. The resulting trees are
-      suspended. *)
+  (** Splits the tree around the first measure satisfying [p], returning the
+      parts before and after. The resulting trees are suspended. *)
 
   val get : p:(monoid -> bool) -> 'a t -> 'a elt
-  (** Retrieves the first element for which the accumulated measure satisfies the predicate. *)
+  (** Retrieves the first element for which the accumulated measure satisfies
+      the predicate. *)
 
   val insert : p:(monoid -> bool) -> 'a elt -> 'a t -> 'a t
-  (** Inserts the element at the point where [p] becomes true with the
-      given element. *)
+  (** Inserts the element at the point where [p] becomes true with the given
+      element. *)
 
   val set : p:(monoid -> bool) -> 'a elt -> 'a t -> 'a t
-  (** Replaces the element at the point where [p] becomes true with
-      the given element. *)
+  (** Replaces the element at the point where [p] becomes true with the given
+      element. *)
 
   val pop : p:(monoid -> bool) -> 'a t -> 'a elt * 'a t
   (** Removes and returns the element at the split point determined by [p]. *)
@@ -228,11 +236,10 @@ module type S = sig
   (** Converts a finger tree to [Seq.t] (right to left). *)
 
   val unfold : f:('a -> ('b elt * 'a) option) -> init:'a -> 'b t
-  (** Builds a finger tree from an unfolding function. The unfolding
-      function is passed the initial state. If the output is [Some] of
-      a pair of an element, which is appended to the accumulated tree,
-      and the next state, which again passed to [f]. This process is
-      repeated until [None] is returned. *)
+  (** Builds a finger tree from an unfolding function. The unfolding function is
+      passed the initial state. If the output is [Some] of a pair of an element,
+      which is appended to the accumulated tree, and the next state, which again
+      passed to [f]. This process is repeated until [None] is returned. *)
 
   module Operators : sig
     val ( @< ) : 'a elt -> 'a t -> 'a t
