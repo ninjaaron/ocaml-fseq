@@ -235,7 +235,7 @@
     {!Fseq.t} is cheap to split and join, with the operations costing O(log(n)),
     similarly to random-access operations.
 
-    {@ocmal[
+    {@ocaml[
       # let fs = Fseq.init ~len:10 ~f:Fun.id;;
       val fs : int Fseq.t = Fseq<0; 1; 2; 3; 4; 5; 6; 7; 8; 9>
 
