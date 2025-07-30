@@ -60,8 +60,6 @@
     to the right (or back) with {!radd}.
 
     {@ocaml[
-      # module Fseq = La_fingertree.Fseq;;
-
       # let one_value = Fseq.ladd "foo" Fseq.empty;;
       val one_value : string Fseq.t = Fseq<"foo">
 
@@ -457,11 +455,16 @@ val map : f:('a -> 'b) -> 'a t -> 'b t
     would be simple to write [map] in a way that all applications of [f] occur
     in the order of elements in the sequence, but I found it cool to allow this
     computation to be suspended. If there is "public outcry" about this
-    behavior, I'll change it. *)
+    decision, I'll change it. *)
 
 val filter : f:('a -> bool) -> 'a t -> 'a t
 val filter_map : f:('a -> 'b option) -> 'a t -> 'b t
 val concat_map : f:('a -> 'b t) -> 'a t -> 'b t
+val map2 : f:('a -> 'b -> 'c) -> 'a t -> 'b t -> 'c t
+val map2_exn : f:('a -> 'b -> 'c) -> 'a t -> 'b t -> 'c t
+val find : f:('a -> bool) -> 'a t -> int option
+val split_when : f:('a -> bool) -> 'a t -> 'a t * 'a t
+val split_when_lazy : f:('a -> bool) -> 'a t -> 'a t Lazy.t * 'a t Lazy.t
 
 (** {3 Converstion operations} *)
 

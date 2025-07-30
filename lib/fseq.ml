@@ -773,6 +773,40 @@ module T = struct
         and start' = Digit.to_seq l in
         (append start' @@ append mid' end') ()
 
+  let map2 ~f t1 t2 =
+    let rf (acc, seq) a =
+      match seq () with
+      | Seq.Nil -> (acc, seq)
+      | Seq.Cons (b, seq') -> (radd acc (f a b), seq')
+    in
+    let out, _ = fold ~f:rf ~init:(empty, to_seq t2) t1 in
+    out
+
+  let map2_exn ~f t1 t2 =
+    if length t1 <> length t2 then
+      invalid_arg
+        "The sequences are not of equal length. Use map2 if this does not \
+         matter."
+    else map2 ~f t1 t2
+
+  let find ~f t =
+    let idx = ref 0 in
+    match
+      fold t ~init:0 ~f:(fun i el ->
+          if f el then (
+            idx := i;
+            raise_notrace Exit)
+          else succ i)
+    with
+    | exception Exit -> Some !idx
+    | _ -> None
+
+  let split_when_lazy ~f t =
+    match find ~f t with None -> (lazy t, lempty) | Some i -> split_lazy i t
+
+  let split_when ~f t =
+    match find ~f t with None -> (t, empty) | Some i -> split i t
+
   let rec rev_to_seq : 'a. 'a t -> 'a Seq.t =
    fun t () ->
     let open Seq in
