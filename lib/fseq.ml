@@ -1,6 +1,13 @@
 let ( !! ) = Lazy.force
 let one _ = 1
 
+exception FseqError of string
+
+let () =
+  Printexc.register_printer @@ function
+  | FseqError s -> Some (Printf.sprintf "FseqError %S" s)
+  | _ -> None
+
 module Node = struct
   type 'a t = N2 of int * 'a * 'a | N3 of int * 'a * 'a * 'a
 
@@ -252,7 +259,7 @@ module Digit = struct
     | One b -> Two (a, b)
     | Two (b, c) -> Three (a, b, c)
     | Three (b, c, d) -> Four (a, b, c, d)
-    | _ -> invalid_arg "cannot ladd Four digit"
+    | _ -> raise @@ FseqError "cannot ladd Four digit"
 
   let view_l = function
     | One a -> (a, None)
@@ -271,7 +278,7 @@ module Digit = struct
     | One y -> Two (y, z)
     | Two (x, y) -> Three (x, y, z)
     | Three (w, x, y) -> Four (w, x, y, z)
-    | _ -> invalid_arg "cannot radd Four digit"
+    | _ -> raise @@ FseqError "cannot radd Four digit"
 
   let view_r = function
     | One a -> (a, None)
@@ -364,8 +371,7 @@ module T = struct
   let length t = _measure one t
 
   let bounds_check i t =
-    if i < 0 || i >= length t then
-      raise @@ Invalid_argument "index is out of bounds"
+    if i < 0 || i >= length t then raise @@ FseqError "index is out of bounds"
     else ()
 
   let rec pp_debug :
@@ -514,7 +520,7 @@ module T = struct
   let is_empty t = match lview_lazy t with None -> true | Some _ -> false
 
   let hd_left_exn = function
-    | Empty -> invalid_arg "can't find head of empty finger tree"
+    | Empty -> raise @@ FseqError "can't find head of empty finger tree"
     | Single x -> x
     | Deep (_, pr, _, _) -> Digit.hd pr
 
@@ -549,7 +555,7 @@ module T = struct
   let rview t = Option.map (fun ((lazy t), h) -> (t, h)) (rview_lazy t)
 
   let hd_right_exn = function
-    | Empty -> invalid_arg "can't find head of empty finger tree"
+    | Empty -> raise @@ FseqError "can't find head of empty finger tree"
     | Single x -> x
     | Deep (_, _, _, sf) -> Digit.hd_r sf
 
@@ -581,6 +587,7 @@ module T = struct
           sf2
 
   let join t1 t2 = _join one t1 t2
+  let append = join
   let ( >< ) = join
   let join_with t1 el t2 = app3 t1 (One el) t2
 
@@ -588,7 +595,7 @@ module T = struct
 
   let rec _split : 'a. ('a -> int) -> int -> 'a t -> 'a split =
    fun ms i -> function
-    | Empty -> assert false
+    | Empty -> raise @@ FseqError "cannot use _split on an empty sequence"
     | Single x -> (lempty, x, lempty)
     | Deep (_, pr, (lazy mid), sf) ->
         let vpr = Digit.measure ms pr in
@@ -711,7 +718,7 @@ module T = struct
     _app3 one !!l (Two (x, el)) !!r
 
   let insert_exn i el t =
-    if i < 0 || i > length t then invalid_arg "index is out of bounds"
+    if i < 0 || i > length t then raise @@ FseqError "index is out of bounds"
     else insert_unchecked i el t
 
   let insert i el t =
@@ -784,9 +791,10 @@ module T = struct
 
   let map2_exn ~f t1 t2 =
     if length t1 <> length t2 then
-      invalid_arg
-        "The sequences are not of equal length. Use map2 if this does not \
-         matter."
+      raise
+      @@ FseqError
+           "The sequences are not of equal length. Use map2 if this does not \
+            matter."
     else map2 ~f t1 t2
 
   let find ~f t =
@@ -920,7 +928,8 @@ module NonEmpty = struct
     | Deep (v, l, m, r) -> Some (Deep (v, l, m, r))
 
   let of_t_exn : 'a T.t -> 'a t = function
-    | Empty -> invalid_arg "cannot construct non-empty from empty sequence"
+    | Empty ->
+        raise @@ FseqError "cannot construct non-empty from empty sequence"
     | Single a -> Single a
     | Deep (v, l, m, r) -> Deep (v, l, m, r)
 
@@ -1051,7 +1060,8 @@ module NonEmpty = struct
   let tl_left_exn t =
     match lview t with
     | _, None ->
-        invalid_arg "can't derive non-empty tail of single-element sequence"
+        raise
+        @@ FseqError "can't derive non-empty tail of single-element sequence"
     | _, Some t -> t
 
   let rec rview_lazy t =
@@ -1080,7 +1090,8 @@ module NonEmpty = struct
   let tl_right_exn t =
     match rview t with
     | None, _ ->
-        invalid_arg "can't derive non-empty tail of single-element sequence"
+        raise
+        @@ FseqError "can't derive non-empty tail of single-element sequence"
     | Some t, _ -> t
 
   let app3 t1 d t2 =
@@ -1101,6 +1112,7 @@ module NonEmpty = struct
           (lazy (_app3 Node.measure !!m1 (Digit.join2 one sf1 pr2) !!m2))
           sf2
 
+  let append = join
   let ( >< ) = join
   let join_with t1 el t2 = app3 t1 (One el) t2
 
@@ -1198,7 +1210,7 @@ module NonEmpty = struct
         Some (loop (singleton el) state)
 
   let init ~len ~f =
-    if len < 1 then invalid_arg "nonempty length cannot be less than 1";
+    if len < 1 then raise @@ FseqError "nonempty length cannot be less than 1";
     let rec loop i t = if i >= len then t else loop (i + 1) (t >@ f i) in
     loop 1 (singleton (f 0))
 

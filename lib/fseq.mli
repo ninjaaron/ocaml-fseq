@@ -1,6 +1,5 @@
-(** {!Fseq.t} is a functional finite sequence.
-
-    It is general purpose sequence and excels for several tasks:
+(** {!Fseq.t} is a functional finite sequence. It is general purpose and excels
+    for several tasks:
 
     - As a deque, it has amortized O(1) access time to both ends of the
       sequence.
@@ -12,9 +11,10 @@
       operations, a characteristic non-tree containers cannot duplicate. This
       makes it a great option for highly concatenative operations like
       {!concat_map}.
-    - Because of the greater structural complexity, the sequence is not as good
-      of a stack as a basic linked list, and accessing the left end of the
-      sequence has a higher constant time than doing the so with a list.
+
+    Because of the greater structural complexity, the sequence is not as good of
+    a stack as a basic linked list, and accessing the left end of the sequence
+    has a higher constant time than doing the so with a list.
 
     As always, when performance matters, profile your code and seek an
     alternative if [Fseq] proves to be too slow for your usecase. To me the
@@ -26,6 +26,8 @@
     As a functional data structure, operations which modify the content of a
     sequence create a new sequence as output, leaving the input sequence
     unchanged.
+
+    {2 Background}
 
     {!Fseq.t} is based on the random access sequence presented in
     {{:https://www.staff.city.ac.uk/~ross/papers/FingerTree.html} Finger Trees:
@@ -53,6 +55,14 @@
     It is the same data structure as Haskell's
     {{:https://hackage-content.haskell.org/package/containers-0.8/docs/Data-Sequence.html}
      Data.Sequence}.
+
+    {2 Name}
+
+    [Fseq] is so called because the original finger tree paper implements the
+    random access sequence with the [Seq] constructor. However, [Seq] already
+    means something in OCaml. [F] was chosen as a prefix because the sequence is
+    {b f}inite, {b f}unctional and is implemented as a {b f}inger tree, but
+    [Fffseq] is just stupid.
 
     {2 Usage as deque}
 
@@ -124,7 +134,7 @@
     {!lview_lazy} and {!rview_lazy} correspond to [lview] and [rview], but they
     are lazy in the computation of the tail (i.e. the remaining sequence).
     {!hd_left_exn} and {!hd_right_exn} retrieve only the end element and throw
-    [Invalid_argument] if the sequence is empty.
+    [FseqError] if the sequence is empty.
 
     Deque rotation (not matrix rotation) is also provided:
 
@@ -164,8 +174,8 @@
     Note that {!set} is not like [Array.set] in that it does not do in-place
     modification, but produces a new sequence with the updated value.
 
-    If you prefer an [Invalid_argument] exception instead of an option,
-    {!get_exn} and {!set_exn} are available.
+    If you prefer an [FseqError] exception instead of an option, {!get_exn} and
+    {!set_exn} are available.
 
     Likewise, if you know your index is in bounds, checks may be omitted with
     {!get_unchecked} and {!set_unchecked}. The bounds check quite cheap relative
@@ -294,6 +304,13 @@
 
     {2 API Reference} *)
 
+exception FseqError of string
+(** All exceptions arising from this library are [FseqError]. Note that
+    [assert false] is used to indicate branches which I believe to be
+    unreachable. If you see an [Assert_failure] while using this library,
+    congratulations! You've found a bug! Please report it by opening an issue at
+    {:https://github.com/ninjaaron/ocaml-fseq}. *)
+
 type 'a t
 
 val empty : 'a t
@@ -333,7 +350,10 @@ val unfold : f:('a -> ('b * 'a) option) -> init:'a -> 'b t
     [Some] of a pair of an element and the next state to passed to [f]. *)
 
 val join : 'a t -> 'a t -> 'a t
-(** join two sequences. Probably should be called "append". *)
+(** join two sequences. *)
+
+val append : 'a t -> 'a t -> 'a t
+(** Alias for {!join}, since this is the more common name in OCaml. *)
 
 val ( >< ) : 'a t -> 'a t -> 'a t
 (** Operator version of join. Left associative. *)
@@ -568,6 +588,7 @@ module NonEmpty : sig
       non-empty sequence *)
 
   val join : 'a t -> 'a t -> 'a t
+  val append : 'a t -> 'a t -> 'a t
   val ( >< ) : 'a t -> 'a t -> 'a t
   val join_with : 'a t -> 'a -> 'a t -> 'a t
   val insert : int -> 'a -> 'a t -> 'a t option
