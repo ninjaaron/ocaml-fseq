@@ -360,7 +360,7 @@ module T = struct
     | N3 (_, a, b, c) ->
         let ms_a = ms a in
         if i < ms_a then (None, a, Some (Two (b, c)))
-        else if i < ms_a + ms b then (Some (One a), b, Some (One b))
+        else if i < ms_a + ms b then (Some (One a), b, Some (One c))
         else (Some (Two (a, b)), c, None)
 
   let _measure ms = function
@@ -599,6 +599,7 @@ module T = struct
     | Single x -> (lempty, x, lempty)
     | Deep (_, pr, (lazy mid), sf) ->
         let vpr = Digit.measure ms pr in
+        Printf.printf "vpr: %d\n" vpr;
         if i < vpr then
           let l, x, r = Digit.split ms i pr in
           let l =
@@ -606,8 +607,9 @@ module T = struct
           in
           (l, x, deep_l ms r (lazy mid) sf)
         else
-          let vm = length mid in
+          let vm = _measure Node.measure mid in
           let i' = i - vpr in
+          Printf.printf "vm: %d, i': %d\n" vm i';
           if i' < vm then
             let (lazy ml), xs, mr = _split Node.measure i' mid in
             let l, x, r = split_node ms (i' - _measure Node.measure ml) xs in
@@ -635,7 +637,7 @@ module T = struct
           if i' < vm then
             let (lazy ml), xs, _ = _split Node.measure i' mid in
             Node.get ms (i' - _measure Node.measure ml) xs
-          else Digit.get ms i' sf
+          else Digit.get ms (i' - vm) sf
 
   let get_unchecked i t = _get one i t
 
