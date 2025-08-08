@@ -599,7 +599,6 @@ module T = struct
     | Single x -> (lempty, x, lempty)
     | Deep (_, pr, (lazy mid), sf) ->
         let vpr = Digit.measure ms pr in
-        Printf.printf "vpr: %d\n" vpr;
         if i < vpr then
           let l, x, r = Digit.split ms i pr in
           let l =
@@ -609,7 +608,6 @@ module T = struct
         else
           let vm = _measure Node.measure mid in
           let i' = i - vpr in
-          Printf.printf "vm: %d, i': %d\n" vm i';
           if i' < vm then
             let (lazy ml), xs, mr = _split Node.measure i' mid in
             let l, x, r = split_node ms (i' - _measure Node.measure ml) xs in
