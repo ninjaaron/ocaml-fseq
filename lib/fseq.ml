@@ -687,7 +687,7 @@ module T = struct
         else (lazy xs, lempty)
 
   let split i t =
-    let (lazy r), (lazy l) = split_lazy i t in
+    let (lazy l), (lazy r) = split_lazy i t in
     (l, r)
 
   let take n t =
