@@ -6,7 +6,7 @@
     - As a functional alternative to arrays, it provides O(log(n)) random access
       to elements, and provides better cache locality than a list (though this
       really only matters with unboxed values). Obviously an array is faster for
-      these things, but the sequence is purely functional.
+      these things, but the sequence is purely functional, if that matters.
     - Additionally, the sequence provides O(log(n)) time for split and join
       operations, a characteristic non-tree containers cannot duplicate. This
       makes it a great option for highly concatenative operations like
@@ -335,7 +335,7 @@ val ( @< ) : 'a -> 'a t -> 'a t
 
 val radd : 'a t -> 'a -> 'a t
 (** Add an element to the right side of a sequence. Like [snoc] in that "other"
-    functional language. Performance is O(1). *)
+    functional language. Performance is amortized to O(1). *)
 
 val ( >@ ) : 'a t -> 'a -> 'a t
 (** operator version of {!radd}. Left associative. *)
