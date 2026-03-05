@@ -579,10 +579,10 @@ module Make (M : Measurable) :
       | One a -> a
       | Two (a, b) -> if p (i + ms a) then a else b
       | Three (a, b, c) ->
-          let i' = ms a in
+          let i' = i + ms a in
           if p i' then a else if p (i' + ms b) then b else c
       | Four (a, b, c, d) ->
-          let i' = ms a in
+          let i' = i + ms a in
           if p i' then a
           else
             let i'' = i' + ms b in
@@ -624,7 +624,7 @@ module Make (M : Measurable) :
     | N3 (_, a, b, c) ->
         let i' = i + ms a in
         if p i' then (None, a, Some (Two (b, c)))
-        else if p (i' + ms b) then (Some (One a), b, Some (One b))
+        else if p (i' + ms b) then (Some (One a), b, Some (One c))
         else (Some (Two (a, b)), c, None)
 
   let _measure ms = function
