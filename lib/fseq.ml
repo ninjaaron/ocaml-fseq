@@ -150,6 +150,52 @@ module Digit = struct
     | Four (a, b, c, d), Four (e, f, g, h) ->
         Node.(Three (mk3 ms a b c, mk3 ms d e f, mk2 ms g h))
 
+  let join3_a ms t1 t2 t3 =
+
+    let buf = Array.make 12 (Obj.magic ()) in
+    let idx = ref 0 in
+
+    let collect digit =
+      let open Array in
+      let i = !idx in
+      match digit with
+      | One a -> unsafe_set buf i a;
+        incr idx
+      | Two (a, b) -> unsafe_set buf i a; unsafe_set buf (i + 1) b;
+        idx := i + 2
+      | Three (a, b, c) ->
+        unsafe_set buf i a; unsafe_set buf (i + 1) b; unsafe_set buf (i + 2) c;
+        idx := i + 3
+      | Four (a, b, c, d) ->
+        unsafe_set buf i a; unsafe_set buf (i + 1) b; unsafe_set buf (i + 2) c;
+        unsafe_set buf (i + 3) d;
+        idx := i + 4 in
+  
+    collect t1; collect t2; collect t3;
+    match !idx, buf with
+    | 3, [|a; b; c; _; _; _; _; _; _; _; _; _|] ->
+      One (Node.mk3 ms a b c)
+    | 4, [|a; b; c; d; _; _; _; _; _; _; _; _|] ->
+        Two (Node.mk2 ms a b, Node.mk2 ms c d)
+    | 5, [|a; b; c; d; e; _; _; _; _; _; _; _|] ->
+      Node.(Two (mk3 ms a b c, mk2 ms d e))
+    | 6, [|a; b; c; d; e; f; _; _; _; _; _; _|] ->
+      Node.(Two (mk3 ms a b c, mk3 ms d e f))
+    | 7, [|a; b; c; d; e; f; g; _; _; _; _; _|] ->
+      Node.(Three (mk3 ms a b c, mk2 ms d e, mk2 ms f g))
+    | 8, [|a; b; c; d; e; f; g; h; _; _; _; _|] ->
+      Node.(Three (mk3 ms a b c, mk3 ms d e f, mk2 ms g h))
+    | 9, [|a; b; c; d; e; f; g; h; i; _; _; _|] ->
+      Node.(Three (mk3 ms a b c, mk3 ms d e f, mk3 ms g h i))
+    | 10, [|a; b; c; d; e; f; g; h; i; j; _; _|] ->
+      Node.(Four (mk3 ms a b c, mk3 ms d e f, mk2 ms g h, mk2 ms i j))
+    | 11, [|a; b; c; d; e; f; g; h; i; j; k; _|] ->
+      Node.(Four (mk3 ms a b c, mk3 ms d e f, mk3 ms g h i, mk2 ms j k))
+    | 12, [|a; b; c; d; e; f; g; h; i; j; k; l|] ->
+      Node.(Four (mk3 ms a b c, mk3 ms d e f, mk3 ms g h i, mk3 ms j k l))
+    | _ -> assert false
+          
+
   let join3 ms t1 t2 t3 =
     match (t1, t2, t3) with
     (* 3 *)
@@ -158,7 +204,7 @@ module Digit = struct
     | One a, One b, Two (c, d)
     | One a, Two (b, c), One d
     | Two (a, b), One c, One d ->
-        Two (Node.mk2 ms a b, Node.mk2 ms c d)
+      Two (Node.mk2 ms a b, Node.mk2 ms c d)
     (* 5 *)
     | One a, One b, Three (c, d, e)
     | One a, Two (b, c), Two (d, e)
@@ -166,7 +212,7 @@ module Digit = struct
     | Two (a, b), One c, Two (d, e)
     | Two (a, b), Two (c, d), One e
     | Three (a, b, c), One d, One e ->
-        Node.(Two (mk3 ms a b c, mk2 ms d e))
+      Node.(Two (mk3 ms a b c, mk2 ms d e))
     (* 6 *)
     | One a, One b, Four (c, d, e, f)
     | One a, Two (b, c), Three (d, e, f)
@@ -178,7 +224,7 @@ module Digit = struct
     | Three (a, b, c), One d, Two (e, f)
     | Three (a, b, c), Two (d, e), One f
     | Four (a, b, c, d), One e, One f ->
-        Node.(Two (mk3 ms a b c, mk3 ms d e f))
+      Node.(Two (mk3 ms a b c, mk3 ms d e f))
     (* 7 *)
     | One a, Two (b, c), Four (d, e, f, g)
     | One a, Three (b, c, d), Three (e, f, g)
@@ -192,7 +238,7 @@ module Digit = struct
     | Three (a, b, c), Three (d, e, f), One g
     | Four (a, b, c, d), One e, Two (f, g)
     | Four (a, b, c, d), Two (e, f), One g ->
-        Node.(Three (mk3 ms a b c, mk2 ms d e, mk2 ms f g))
+      Node.(Three (mk3 ms a b c, mk2 ms d e, mk2 ms f g))
     (* 8 *)
     | One a, Three (b, c, d), Four (e, f, g, h)
     | One a, Four (b, c, d, e), Three (f, g, h)
@@ -206,7 +252,7 @@ module Digit = struct
     | Four (a, b, c, d), One e, Three (f, g, h)
     | Four (a, b, c, d), Two (e, f), Two (g, h)
     | Four (a, b, c, d), Three (e, f, g), One h ->
-        Node.(Three (mk3 ms a b c, mk3 ms d e f, mk2 ms g h))
+      Node.(Three (mk3 ms a b c, mk3 ms d e f, mk2 ms g h))
     (* 9 *)
     | One a, Four (b, c, d, e), Four (f, g, h, i)
     | Two (a, b), Three (c, d, e), Four (f, g, h, i)
@@ -218,7 +264,7 @@ module Digit = struct
     | Four (a, b, c, d), Two (e, f), Three (g, h, i)
     | Four (a, b, c, d), Three (e, f, g), Two (h, i)
     | Four (a, b, c, d), Four (e, f, g, h), One i ->
-        Node.(Three (mk3 ms a b c, mk3 ms d e f, mk3 ms g h i))
+      Node.(Three (mk3 ms a b c, mk3 ms d e f, mk3 ms g h i))
     (* 10 *)
     | Two (a, b), Four (c, d, e, f), Four (g, h, i, j)
     | Three (a, b, c), Three (d, e, f), Four (g, h, i, j)
@@ -226,15 +272,15 @@ module Digit = struct
     | Four (a, b, c, d), Two (e, f), Four (g, h, i, j)
     | Four (a, b, c, d), Three (e, f, g), Three (h, i, j)
     | Four (a, b, c, d), Four (e, f, g, h), Two (i, j) ->
-        Node.(Four (mk3 ms a b c, mk3 ms d e f, mk2 ms g h, mk2 ms i j))
+      Node.(Four (mk3 ms a b c, mk3 ms d e f, mk2 ms g h, mk2 ms i j))
     (* 11 *)
     | Three (a, b, c), Four (d, e, f, g), Four (h, i, j, k)
     | Four (a, b, c, d), Three (e, f, g), Four (h, i, j, k)
     | Four (a, b, c, d), Four (e, f, g, h), Three (i, j, k) ->
-        Node.(Four (mk3 ms a b c, mk3 ms d e f, mk3 ms g h i, mk2 ms j k))
+      Node.(Four (mk3 ms a b c, mk3 ms d e f, mk3 ms g h i, mk2 ms j k))
     (* 12 *)
     | Four (a, b, c, d), Four (e, f, g, h), Four (i, j, k, l) ->
-        Node.(Four (mk3 ms a b c, mk3 ms d e f, mk3 ms g h i, mk3 ms j k l))
+      Node.(Four (mk3 ms a b c, mk3 ms d e f, mk3 ms g h i, mk3 ms j k l))
 
   let fold_left f acc = function
     | One a -> f acc a
