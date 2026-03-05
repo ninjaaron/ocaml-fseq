@@ -1,5 +1,6 @@
-(test
- (name test_fingerTree)
- (libraries la_base)
+(library
+ (name test_fseq)
+ (libraries fseq)
  (preprocess
-  (pps ppx_deriving.std)))
+  (pps ppx_expect))
+ (inline_tests))
